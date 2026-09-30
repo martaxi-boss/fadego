@@ -6,7 +6,7 @@ import type { PoolClient } from "pg"
 const databaseUrl = process.env.DATABASE_URL
 assert.ok(databaseUrl, "DATABASE_URL is required for concurrency tests.")
 
-const applicationName = \`fadego-concurrency-\${process.pid}\`
+const applicationName = `fadego-concurrency-${process.pid}`
 const scopedDatabaseUrl = new URL(databaseUrl)
 scopedDatabaseUrl.searchParams.set("application_name", applicationName)
 process.env.DATABASE_URL = scopedDatabaseUrl.toString()
@@ -24,15 +24,15 @@ const createShopWithStaff = async (tag: string) => {
   const suffix = randomUUID().replace(/-/g, "").slice(0, 10)
   const shop = await db.barbershop.create({
     data: {
-      name: \`Concurrency \${tag}\`,
-      slug: \`concurrency-\${tag}-\${suffix}\`,
+      name: `Concurrency ${tag}`,
+      slug: `concurrency-${tag}-${suffix}`,
     },
   })
 
   const staff = await db.staffMember.create({
     data: {
       barbershopId: shop.id,
-      name: \`Staff \${tag}\`,
+      name: `Staff ${tag}`,
     },
   })
 
@@ -57,7 +57,7 @@ const waitForBlockedQuery = async (
 ) => {
   for (let attempt = 0; attempt < 2000; attempt += 1) {
     const result = await observer.query<{ blocked: boolean }>(
-      \`
+      `
         SELECT EXISTS (
           SELECT 1
           FROM pg_stat_activity
@@ -67,8 +67,8 @@ const waitForBlockedQuery = async (
             AND query LIKE $2
             AND wait_event_type = 'Lock'
         ) AS blocked
-      \`,
-      [applicationName, \`%\${queryFragment}%\`],
+      `,
+      [applicationName, `%${queryFragment}%`],
     )
 
     if (result.rows[0]?.blocked) {
@@ -78,7 +78,7 @@ const waitForBlockedQuery = async (
     await new Promise<void>((resolve) => setImmediate(resolve))
   }
 
-  assert.fail(\`Expected blocked PostgreSQL query containing: \${queryFragment}\`)
+  assert.fail(`Expected blocked PostgreSQL query containing: ${queryFragment}`)
 }
 
 after(async () => {
@@ -108,20 +108,20 @@ test("deactivate first serial order rejects a later new STAFF_BOOKING assignment
     await lifecycleWriter.query("BEGIN")
     transactionOpen = true
     await lifecycleWriter.query(
-      \`
+      `
         SELECT "id"
         FROM "StaffMember"
         WHERE "id" = $1 AND "barbershopId" = $2
         FOR UPDATE
-      \`,
+      `,
       [staff.id, shop.id],
     )
     await lifecycleWriter.query(
-      \`
+      `
         UPDATE "StaffMember"
         SET "active" = false, "updatedAt" = CURRENT_TIMESTAMP
         WHERE "id" = $1 AND "barbershopId" = $2
-      \`,
+      `,
       [staff.id, shop.id],
     )
 
@@ -219,23 +219,23 @@ test("stale lifecycle writer cannot reactivate or unarchive an already committed
     await archiver.query("BEGIN")
     transactionOpen = true
     await archiver.query(
-      \`
+      `
         SELECT "id"
         FROM "StaffMember"
         WHERE "id" = $1 AND "barbershopId" = $2
         FOR UPDATE
-      \`,
+      `,
       [staff.id, shop.id],
     )
     await archiver.query(
-      \`
+      `
         UPDATE "StaffMember"
         SET
           "active" = false,
           "archivedAt" = CURRENT_TIMESTAMP,
           "updatedAt" = CURRENT_TIMESTAMP
         WHERE "id" = $1 AND "barbershopId" = $2
-      \`,
+      `,
       [staff.id, shop.id],
     )
 

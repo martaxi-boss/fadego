@@ -544,7 +544,7 @@ const isOverlapConflict = (error: unknown): boolean => {
   return false
 }
 
-const runCapacityMutation = async <T>(
+export const runBookingMutation = async <T>(
   operation: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> => {
   try {
@@ -565,71 +565,41 @@ const runCapacityMutation = async <T>(
   }
 }
 
-export const createBooking = async (
+export const createBookingInTransaction = async (
+  tx: Prisma.TransactionClient,
   input: CreateBookingInput,
   clock: BookingClock = systemBookingClock,
-): Promise<Booking> =>
-  runCapacityMutation(async (tx) => {
-    await acquireTenantBookingLock(tx, input.barbershopId)
+): Promise<Booking> => {
+  await acquireTenantBookingLock(tx, input.barbershopId)
 
-    const tenant = await lockBarbershop(tx, input.barbershopId)
-    const customer = await lockCustomer(
+  const tenant = await lockBarbershop(tx, input.barbershopId)
+  const customer = await lockCustomer(
+    tx,
+    input.barbershopId,
+    input.customerId,
+  )
+  const service = await lockService(tx, input.barbershopId, input.serviceId)
+
+  const startsAt = new Date(input.startsAt)
+  assertGridStart(startsAt)
+  assertFutureStart(startsAt, clock)
+
+  const endsAt = new Date(
+    startsAt.getTime() + service.durationMinutes * 60 * 1000,
+  )
+  await validateOpeningHours(
+    tx,
+    input.barbershopId,
+    tenant.timezone,
+    startsAt,
+    endsAt,
+  )
+
+  if (input.requestedStaffMemberId) {
+    const allocation = await allocateStaffChair(
       tx,
       input.barbershopId,
-      input.customerId,
-    )
-    const service = await lockService(tx, input.barbershopId, input.serviceId)
-
-    const startsAt = new Date(input.startsAt)
-    assertGridStart(startsAt)
-    assertFutureStart(startsAt, clock)
-
-    const endsAt = new Date(
-      startsAt.getTime() + service.durationMinutes * 60 * 1000,
-    )
-    await validateOpeningHours(
-      tx,
-      input.barbershopId,
-      tenant.timezone,
-      startsAt,
-      endsAt,
-    )
-
-    if (input.requestedStaffMemberId) {
-      const allocation = await allocateStaffChair(
-        tx,
-        input.barbershopId,
-        input.requestedStaffMemberId,
-        startsAt,
-        endsAt,
-      )
-
-      return tx.booking.create({
-        data: {
-          barbershopId: input.barbershopId,
-          customerId: customer.id,
-          serviceId: service.id,
-          chairId: allocation.chair.id,
-          staffMemberId: allocation.staff.id,
-          mode: "STAFF_BOOKING",
-          startsAt,
-          endsAt,
-          status: "CONFIRMED",
-          serviceNameSnapshot: service.name,
-          serviceDurationMinutes: service.durationMinutes,
-          servicePriceSnapshot: service.price,
-          customerNameSnapshot: customer.name,
-          customerPhoneSnapshot: customer.phone,
-          customerEmailSnapshot: customer.email,
-          staffNameSnapshot: allocation.staff.name,
-          chairNumberSnapshot: allocation.chair.number,
-        },
-      })
-    }
-
-    const chair = await allocateGeneralChair(
-      tx,
-      input.barbershopId,
+      input.requestedStaffMemberId,
       startsAt,
       endsAt,
     )
@@ -639,9 +609,9 @@ export const createBooking = async (
         barbershopId: input.barbershopId,
         customerId: customer.id,
         serviceId: service.id,
-        chairId: chair.id,
-        staffMemberId: null,
-        mode: "GENERAL_BOOKING",
+        chairId: allocation.chair.id,
+        staffMemberId: allocation.staff.id,
+        mode: "STAFF_BOOKING",
         startsAt,
         endsAt,
         status: "CONFIRMED",
@@ -651,18 +621,54 @@ export const createBooking = async (
         customerNameSnapshot: customer.name,
         customerPhoneSnapshot: customer.phone,
         customerEmailSnapshot: customer.email,
-        staffNameSnapshot: null,
-        chairNumberSnapshot: chair.number,
+        staffNameSnapshot: allocation.staff.name,
+        chairNumberSnapshot: allocation.chair.number,
       },
     })
+  }
+
+  const chair = await allocateGeneralChair(
+    tx,
+    input.barbershopId,
+    startsAt,
+    endsAt,
+  )
+
+  return tx.booking.create({
+    data: {
+      barbershopId: input.barbershopId,
+      customerId: customer.id,
+      serviceId: service.id,
+      chairId: chair.id,
+      staffMemberId: null,
+      mode: "GENERAL_BOOKING",
+      startsAt,
+      endsAt,
+      status: "CONFIRMED",
+      serviceNameSnapshot: service.name,
+      serviceDurationMinutes: service.durationMinutes,
+      servicePriceSnapshot: service.price,
+      customerNameSnapshot: customer.name,
+      customerPhoneSnapshot: customer.phone,
+      customerEmailSnapshot: customer.email,
+      staffNameSnapshot: null,
+      chairNumberSnapshot: chair.number,
+    },
   })
+}
+
+export const createBooking = async (
+  input: CreateBookingInput,
+  clock: BookingClock = systemBookingClock,
+): Promise<Booking> =>
+  runBookingMutation((tx) => createBookingInTransaction(tx, input, clock))
 
 const cancelBooking = async (
   barbershopId: string,
   bookingId: string,
   cancellationStatus: "CANCELLED_BY_CUSTOMER" | "CANCELLED_BY_SHOP",
 ) =>
-  runCapacityMutation(async (tx) => {
+  runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockBooking(tx, barbershopId, bookingId)
 
@@ -702,7 +708,7 @@ export const rescheduleBooking = async (
   startsAtInput: Date,
   clock: BookingClock = systemBookingClock,
 ) =>
-  runCapacityMutation(async (tx) => {
+  runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockBooking(tx, barbershopId, bookingId)
 
@@ -786,7 +792,7 @@ export const reassignBookingToStaff = async (
   bookingId: string,
   targetStaffMemberId: string,
 ) =>
-  runCapacityMutation(async (tx) => {
+  runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockBooking(tx, barbershopId, bookingId)
 
@@ -825,7 +831,7 @@ export const reassignBookingToGeneral = async (
   barbershopId: string,
   bookingId: string,
 ) =>
-  runCapacityMutation(async (tx) => {
+  runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockBooking(tx, barbershopId, bookingId)
 

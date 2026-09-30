@@ -38,14 +38,14 @@ const lockStaffForAssignment = async (
   barbershopId: string,
   staffMemberId: string,
 ) => {
-  const rows = await tx.$queryRaw<LockedStaffMember[]>\`
+  const rows = await tx.$queryRaw<LockedStaffMember[]>`
     /* fadego:staff-assignment-lock */
     SELECT "id", "active", "archivedAt"
     FROM "StaffMember"
-    WHERE "id" = \${staffMemberId}
-      AND "barbershopId" = \${barbershopId}
+    WHERE "id" = ${staffMemberId}
+      AND "barbershopId" = ${barbershopId}
     FOR UPDATE
-  \`
+  `
 
   return rows[0] ?? null
 }
@@ -55,14 +55,14 @@ const lockStaffForLifecycle = async (
   barbershopId: string,
   staffMemberId: string,
 ) => {
-  const rows = await tx.$queryRaw<LockedStaffMember[]>\`
+  const rows = await tx.$queryRaw<LockedStaffMember[]>`
     /* fadego:staff-lifecycle-lock */
     SELECT "id", "active", "archivedAt"
     FROM "StaffMember"
-    WHERE "id" = \${staffMemberId}
-      AND "barbershopId" = \${barbershopId}
+    WHERE "id" = ${staffMemberId}
+      AND "barbershopId" = ${barbershopId}
     FOR UPDATE
-  \`
+  `
 
   return rows[0] ?? null
 }
@@ -72,14 +72,14 @@ const lockChairForConfiguration = async (
   barbershopId: string,
   chairId: string,
 ) => {
-  const rows = await tx.$queryRaw<LockedChair[]>\`
+  const rows = await tx.$queryRaw<LockedChair[]>`
     /* fadego:chair-configuration-lock */
     SELECT "id", "mode", "staffMemberId"
     FROM "Chair"
-    WHERE "id" = \${chairId}
-      AND "barbershopId" = \${barbershopId}
+    WHERE "id" = ${chairId}
+      AND "barbershopId" = ${barbershopId}
     FOR UPDATE
-  \`
+  `
 
   return rows[0] ?? null
 }

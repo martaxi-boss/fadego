@@ -6,10 +6,16 @@ const config = [
   },
   ...nextPlugin,
   {
+    files: ["**/*.{ts,tsx}"],
     rules: {
       "no-unused-vars": "off",
-      "@typescript-eslint/no-unused-vars": "error",
       "react-hooks/set-state-in-effect": "off",
+    },
+  },
+  {
+    files: ["**/*.{js,jsx,mjs,cjs}"],
+    rules: {
+      "no-unused-vars": "error",
     },
   },
 ];

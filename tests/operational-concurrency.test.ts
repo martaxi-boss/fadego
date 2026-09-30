@@ -78,13 +78,12 @@ const waitForBlockedQuery = async (
           SELECT 1
           FROM pg_stat_activity
           WHERE datname = current_database()
-            AND application_name = $1
             AND pid <> pg_backend_pid()
-            AND query LIKE $2
+            AND query LIKE $1
             AND wait_event_type = 'Lock'
         ) AS blocked
       `,
-      [applicationName, `%${queryFragment}%`],
+      [`%${queryFragment}%`],
     )
 
     if (result.rows[0]?.blocked) {

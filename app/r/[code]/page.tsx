@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { headers } from "next/headers"
 import { lookupPrivateBooking } from "@/lib/public-booking"
+import PrivateBookingControls from "@/app/r/[code]/private-booking-controls"
 import { sourceIpFromHeaders } from "@/lib/request-context"
 
 export const dynamic = "force-dynamic"
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  referrer: "no-referrer",
 }
 
 const statusLabel = {
@@ -105,10 +107,17 @@ export default async function PrivateBookingPage({
           guardar o link ou fazer uma captura de ecrã.
         </div>
 
-        <p className="mt-4 text-xs text-gray-500">
-          O cancelamento e a remarcação serão disponibilizados numa fase
-          posterior.
-        </p>
+        {booking.status === "NEEDS_REASSIGNMENT" ? (
+          <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+            A barbearia precisa de reatribuir esta marcação.
+          </p>
+        ) : null}
+
+        <PrivateBookingControls
+          canCancel={booking.canCancel}
+          canReschedule={booking.canReschedule}
+          code={code}
+        />
       </section>
     </main>
   )

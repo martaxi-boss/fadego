@@ -14,7 +14,10 @@ export const acquireTenantBookingLock = async (
   tx: Prisma.TransactionClient,
   barbershopId: string,
 ) => {
-  await tx.$queryRaw`
-    SELECT pg_advisory_xact_lock(hashtextextended(${barbershopId}, 0))
+  await tx.$queryRaw<{ locked: number }[]>`
+    SELECT 1::int AS "locked"
+    FROM (
+      SELECT pg_advisory_xact_lock(hashtextextended(${barbershopId}, 0))
+    ) AS acquired
   `
 }

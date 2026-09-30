@@ -637,12 +637,12 @@ export const getBookingRescheduleAvailability = async (
       })
 
       if (!barbershop || barbershop.status !== "ACTIVE") {
-        fail("TENANT_UNAVAILABLE")
+        throw new AvailabilityError("TENANT_UNAVAILABLE")
       }
 
       const timezone = barbershop.timezone
       if (!timezone || !isValidTimezone(timezone)) {
-        fail("TIMEZONE_UNAVAILABLE")
+        throw new AvailabilityError("TIMEZONE_UNAVAILABLE")
       }
 
       const baseEmpty = () =>
@@ -679,7 +679,7 @@ export const getBookingRescheduleAvailability = async (
       if (input.mode === "STAFF_BOOKING") {
         const staffMemberId = input.requestedStaffMemberId
         if (!staffMemberId) {
-          fail("STAFF_UNAVAILABLE")
+          throw new AvailabilityError("STAFF_UNAVAILABLE")
         }
 
         const staff = await tx.staffMember.findUnique({
@@ -696,8 +696,8 @@ export const getBookingRescheduleAvailability = async (
           },
         })
 
-        if (!staff?.active || staff.archivedAt) {
-          fail("STAFF_UNAVAILABLE")
+        if (!staff || !staff.active || staff.archivedAt) {
+          throw new AvailabilityError("STAFF_UNAVAILABLE")
         }
 
         const chairs = await tx.chair.findMany({

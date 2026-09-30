@@ -163,16 +163,17 @@ const lockBarbershop = async (
   })
 
   if (!barbershop || barbershop.status !== "ACTIVE") {
-    fail("TENANT_UNAVAILABLE")
+    throw new BookingEngineError("TENANT_UNAVAILABLE")
   }
 
-  if (!barbershop.timezone || !isValidTimezone(barbershop.timezone)) {
-    fail("TIMEZONE_UNAVAILABLE")
+  const timezone = barbershop.timezone
+  if (!timezone || !isValidTimezone(timezone)) {
+    throw new BookingEngineError("TIMEZONE_UNAVAILABLE")
   }
 
   return {
     id: barbershop.id,
-    timezone: barbershop.timezone,
+    timezone,
   }
 }
 
@@ -209,7 +210,7 @@ const lockCustomer = async (
   })
 
   if (!customer) {
-    fail("CUSTOMER_UNAVAILABLE")
+    throw new BookingEngineError("CUSTOMER_UNAVAILABLE")
   }
 
   return customer
@@ -248,8 +249,8 @@ const lockService = async (
     },
   })
 
-  if (!service?.active) {
-    fail("SERVICE_UNAVAILABLE")
+  if (!service || !service.active) {
+    throw new BookingEngineError("SERVICE_UNAVAILABLE")
   }
 
   return service
@@ -339,8 +340,8 @@ const lockStaff = async (
   `
 
   const staff = rows[0]
-  if (!staff?.active || staff.archivedAt) {
-    fail("STAFF_UNAVAILABLE")
+  if (!staff || !staff.active || staff.archivedAt) {
+    throw new BookingEngineError("STAFF_UNAVAILABLE")
   }
 
   return staff
@@ -395,7 +396,7 @@ const allocateGeneralChair = async (
   startsAt: Date,
   endsAt: Date,
   excludeBookingId?: string,
-) => {
+): Promise<LockedChair> => {
   const chairs = await lockGeneralChairs(tx, barbershopId)
 
   for (const chair of chairs) {
@@ -413,7 +414,7 @@ const allocateGeneralChair = async (
     }
   }
 
-  fail("NO_CAPACITY")
+  throw new BookingEngineError("NO_CAPACITY")
 }
 
 const allocateStaffChair = async (
@@ -423,7 +424,7 @@ const allocateStaffChair = async (
   startsAt: Date,
   endsAt: Date,
   excludeBookingId?: string,
-) => {
+): Promise<{ chair: LockedChair; staff: LockedStaff }> => {
   const chairs = await lockStaffChairs(tx, barbershopId, staffMemberId)
   const staff = await lockStaff(tx, barbershopId, staffMemberId)
 
@@ -459,14 +460,14 @@ const allocateStaffChair = async (
     }
   }
 
-  fail("NO_CAPACITY")
+  throw new BookingEngineError("NO_CAPACITY")
 }
 
 const lockBooking = async (
   tx: Prisma.TransactionClient,
   barbershopId: string,
   bookingId: string,
-) => {
+): Promise<LockedBooking> => {
   const rows = await tx.$queryRaw<LockedBooking[]>`
     SELECT
       "id",
@@ -485,7 +486,7 @@ const lockBooking = async (
 
   const booking = rows[0]
   if (!booking) {
-    fail("BOOKING_UNAVAILABLE")
+    throw new BookingEngineError("BOOKING_UNAVAILABLE")
   }
 
   return booking
@@ -706,14 +707,15 @@ export const rescheduleBooking = async (
     )
 
     if (current.mode === "STAFF_BOOKING") {
-      if (!current.staffMemberId) {
-        fail("STAFF_UNAVAILABLE")
+      const staffMemberId = current.staffMemberId
+      if (!staffMemberId) {
+        throw new BookingEngineError("STAFF_UNAVAILABLE")
       }
 
       const allocation = await allocateStaffChair(
         tx,
         barbershopId,
-        current.staffMemberId,
+        staffMemberId,
         startsAt,
         endsAt,
         current.id,

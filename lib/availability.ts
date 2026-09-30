@@ -76,9 +76,14 @@ const fail = (code: AvailabilityErrorCode): never => {
 
 const isValidDate = (value: Date) => Number.isFinite(value.getTime())
 
-const parseLocalDate = (value: string) => {
+export const parseLocalDate = (value: string) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
   if (!match) {
+    fail("INVALID_LOCAL_DATE")
+  }
+
+  const year = Number(match[1])
+  if (!Number.isInteger(year) || year < 1 || year > 9999) {
     fail("INVALID_LOCAL_DATE")
   }
 

@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PlatformRole {
+  USER
+  SUPER_ADMIN
+}
+
+enum BarbershopStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TenantRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+model User {
+  id           String             @id @default(uuid())
+  name         String?
+  email        String             @unique
+  passwordHash String
+  platformRole PlatformRole       @default(USER)
+  active       Boolean            @default(true)
+  memberships  BarbershopMember[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model Barbershop {
+  id              String             @id @default(uuid())
+  name            String
+  slug            String             @unique @db.VarChar(63)
+  logoUrl         String?
+  address         String?
+  phone           String?
+  instagram       String?
+  officialWebsite String?
+  status          BarbershopStatus   @default(ACTIVE)
+  members         BarbershopMember[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+}
+
+model BarbershopMember {
+  id           String     @id @default(uuid())
+  barbershopId String
+  userId       String
+  role         TenantRole
+  active       Boolean    @default(true)
+  revokedAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([barbershopId, userId])
+  @@unique([id, barbershopId])
+  @@index([userId, active])
+  @@index([barbershopId, active, role])
+}
+
+model RateLimit {
+  key    String  @id @db.VarChar(255)
+  points Int     @default(0)
+  expire BigInt?
+}

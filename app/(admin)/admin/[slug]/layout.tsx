@@ -24,11 +24,19 @@ export default async function TenantAdminLayout({
   }
 
   const { barbershop, membership } = access
+  const homeHref = `/admin/${barbershop.slug}`
 
   return (
     <AdminShell
       heading={barbershop.name}
-      homeHref={`/admin/${barbershop.slug}`}
+      homeHref={homeHref}
+      navigation={[
+        { href: homeHref, label: "Visão geral" },
+        { href: `${homeHref}/professionals`, label: "Profissionais" },
+        { href: `${homeHref}/chairs`, label: "Cadeiras" },
+        { href: `${homeHref}/services`, label: "Serviços" },
+        { href: `${homeHref}/hours`, label: "Horários" },
+      ]}
       scopeLabel={`${barbershop.slug}.fadego.pt · ${membership.role}`}
     >
       {children}

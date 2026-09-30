@@ -11,9 +11,9 @@ export default function HomePage() {
           Gestão autónoma para barbearias.
         </h1>
         <p className="mt-6 max-w-xl text-lg leading-8 text-gray-600">
-          Fundação administrativa multi-tenant. Os módulos operacionais de
-          reservas, cadeiras, serviços, Club e pagamentos entram nas fases
-          seguintes.
+          Fundação administrativa multi-tenant com configuração autónoma de
+          profissionais, cadeiras, serviços e horários. Reservas, Club e
+          pagamentos entram apenas nas gates próprias.
         </p>
         <Link
           className="mt-8 inline-flex rounded-lg bg-gray-950 px-5 py-3 font-medium text-white"

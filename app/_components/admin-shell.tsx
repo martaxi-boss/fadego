@@ -2,11 +2,17 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 import SignOutButton from "@/app/_components/sign-out-button"
 
+interface NavigationItem {
+  href: string
+  label: string
+}
+
 interface AdminShellProps {
   scopeLabel: string
   heading: string
   children: ReactNode
   homeHref: string
+  navigation?: NavigationItem[]
 }
 
 export default function AdminShell({
@@ -14,7 +20,11 @@ export default function AdminShell({
   heading,
   children,
   homeHref,
+  navigation,
 }: AdminShellProps) {
+  const items =
+    navigation ?? [{ href: homeHref, label: "Visão geral" }]
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
@@ -31,15 +41,18 @@ export default function AdminShell({
         </div>
       </header>
       <div className="mx-auto grid max-w-6xl gap-8 px-6 py-8 lg:grid-cols-[220px_1fr]">
-        <aside className="rounded-xl border border-gray-200 bg-white p-4">
+        <aside className="h-fit rounded-xl border border-gray-200 bg-white p-4">
           <p className="text-sm font-semibold">{heading}</p>
-          <nav className="mt-4">
-            <Link
-              className="block rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium"
-              href={homeHref}
-            >
-              Visão geral
-            </Link>
+          <nav className="mt-4 space-y-1">
+            {items.map((item) => (
+              <Link
+                className="block rounded-lg px-3 py-2 text-sm font-medium hover:bg-gray-100"
+                href={item.href}
+                key={item.href}
+              >
+                {item.label}
+              </Link>
+            ))}
           </nav>
         </aside>
         <main>{children}</main>

@@ -4,6 +4,7 @@ import { after, test } from "node:test"
 import {
   AvailabilityError,
   getAvailability,
+  parseLocalDate,
   type AvailabilityClock,
 } from "../lib/availability"
 import {
@@ -21,6 +22,37 @@ const earlyClock: AvailabilityClock = {
 const earlyBookingClock: BookingClock = {
   now: () => new Date("2029-01-01T00:00:00.000Z"),
 }
+
+test("civil localDate rejects astronomical year zero before database interaction", () => {
+  assert.throws(
+    () => parseLocalDate("0000-01-01"),
+    (error: unknown) => {
+      assert.ok(error instanceof AvailabilityError)
+      assert.equal(error.code, "INVALID_LOCAL_DATE")
+      return true
+    },
+  )
+})
+
+test("civil localDate accepts year one syntax", () => {
+  const parsed = parseLocalDate("0001-01-01")
+  assert.equal(parsed.weekday, 0)
+})
+
+test("civil localDate keeps canonical impossible-date rejection", () => {
+  assert.throws(
+    () => parseLocalDate("2030-02-30"),
+    (error: unknown) => {
+      assert.ok(error instanceof AvailabilityError)
+      assert.equal(error.code, "INVALID_LOCAL_DATE")
+      return true
+    },
+  )
+})
+
+test("civil localDate preserves valid leap-year round-trip", () => {
+  assert.doesNotThrow(() => parseLocalDate("2000-02-29"))
+})
 
 const weekdayOf = (localDate: string) => {
   const date = new Date(`${localDate}T00:00:00.000Z`)

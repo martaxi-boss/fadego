@@ -5,6 +5,7 @@ export type AvailabilityErrorCode =
   | "TENANT_UNAVAILABLE"
   | "TIMEZONE_UNAVAILABLE"
   | "SERVICE_UNAVAILABLE"
+  | "STAFF_UNAVAILABLE"
   | "INVALID_LOCAL_DATE"
 
 export class AvailabilityError extends Error {
@@ -44,6 +45,15 @@ export type AvailabilityClock = {
 
 export type AvailabilityOptions = {
   clock?: AvailabilityClock
+}
+
+export type BookingRescheduleAvailabilityQuery = {
+  barbershopId: string
+  localDate: string
+  mode: AvailabilityMode
+  durationMinutes: number
+  requestedStaffMemberId?: string | null
+  excludeBookingId: string
 }
 
 type CandidateRow = {
@@ -238,7 +248,7 @@ const resolveWallCandidates = async (
 
 const generateSlots = async (
   tx: Prisma.TransactionClient,
-  input: AvailabilityQuery,
+  input: Pick<AvailabilityQuery, "barbershopId" | "localDate">,
   timezone: string,
   mode: AvailabilityMode,
   durationMinutes: number,
@@ -247,6 +257,7 @@ const generateSlots = async (
   now: Date,
   eligibleChairIds: string[],
   requestedStaffMemberId?: string,
+  excludeBookingId?: string,
 ): Promise<AvailabilitySlot[]> => {
   const firstMinute = Math.ceil(opensAt / 15) * 15
   const candidates = await resolveWallCandidates(
@@ -305,6 +316,7 @@ const generateSlots = async (
     where: {
       barbershopId: input.barbershopId,
       status: { in: [...blockingStatuses] },
+      ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
       startsAt: { lt: windowEnd },
       endsAt: { gt: windowStart },
       ...(requestedStaffMemberId
@@ -572,6 +584,193 @@ export const getAvailability = async (
         timezone,
         mode,
         serviceDurationMinutes: serviceDurationMinutes,
+        slots,
+      }
+    },
+    {
+      isolationLevel: "RepeatableRead",
+      maxWait: 5_000,
+      timeout: 10_000,
+    },
+  )
+}
+
+
+export const getBookingRescheduleAvailability = async (
+  input: BookingRescheduleAvailabilityQuery,
+  options: AvailabilityOptions = {},
+): Promise<AvailabilityResult> => {
+  const { weekday } = parseLocalDate(input.localDate)
+  const clock = options.clock ?? systemAvailabilityClock
+  const now = clock.now()
+
+  if (!isValidDate(now)) {
+    fail("INVALID_LOCAL_DATE")
+  }
+
+  if (
+    !Number.isInteger(input.durationMinutes) ||
+    input.durationMinutes <= 0 ||
+    input.durationMinutes % 15 !== 0
+  ) {
+    fail("SERVICE_UNAVAILABLE")
+  }
+
+  if (
+    input.mode === "STAFF_BOOKING" &&
+    !input.requestedStaffMemberId
+  ) {
+    fail("STAFF_UNAVAILABLE")
+  }
+
+  return db.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY")
+
+      const barbershop = await tx.barbershop.findUnique({
+        where: { id: input.barbershopId },
+        select: {
+          id: true,
+          status: true,
+          timezone: true,
+        },
+      })
+
+      if (!barbershop || barbershop.status !== "ACTIVE") {
+        fail("TENANT_UNAVAILABLE")
+      }
+
+      const timezone = barbershop.timezone
+      if (!timezone || !isValidTimezone(timezone)) {
+        fail("TIMEZONE_UNAVAILABLE")
+      }
+
+      const baseEmpty = () =>
+        emptyResult(
+          input.localDate,
+          timezone,
+          input.mode,
+          input.durationMinutes,
+        )
+
+      const openingHour = await tx.openingHour.findUnique({
+        where: {
+          barbershopId_weekday: {
+            barbershopId: input.barbershopId,
+            weekday,
+          },
+        },
+        select: {
+          isClosed: true,
+          opensAt: true,
+          closesAt: true,
+        },
+      })
+
+      if (
+        !openingHour ||
+        openingHour.isClosed ||
+        openingHour.opensAt === null ||
+        openingHour.closesAt === null
+      ) {
+        return baseEmpty()
+      }
+
+      if (input.mode === "STAFF_BOOKING") {
+        const staffMemberId = input.requestedStaffMemberId
+        if (!staffMemberId) {
+          fail("STAFF_UNAVAILABLE")
+        }
+
+        const staff = await tx.staffMember.findUnique({
+          where: {
+            id_barbershopId: {
+              id: staffMemberId,
+              barbershopId: input.barbershopId,
+            },
+          },
+          select: {
+            id: true,
+            active: true,
+            archivedAt: true,
+          },
+        })
+
+        if (!staff?.active || staff.archivedAt) {
+          fail("STAFF_UNAVAILABLE")
+        }
+
+        const chairs = await tx.chair.findMany({
+          where: {
+            barbershopId: input.barbershopId,
+            active: true,
+            mode: "STAFF_BOOKING",
+            staffMemberId: staff.id,
+          },
+          select: { id: true },
+          orderBy: [{ number: "asc" }, { id: "asc" }],
+        })
+
+        if (chairs.length === 0) {
+          fail("STAFF_UNAVAILABLE")
+        }
+
+        const slots = await generateSlots(
+          tx,
+          input,
+          timezone,
+          input.mode,
+          input.durationMinutes,
+          openingHour.opensAt,
+          openingHour.closesAt,
+          now,
+          chairs.map((chair) => chair.id),
+          staff.id,
+          input.excludeBookingId,
+        )
+
+        return {
+          localDate: input.localDate,
+          timezone,
+          mode: input.mode,
+          serviceDurationMinutes: input.durationMinutes,
+          slots,
+        }
+      }
+
+      const chairs = await tx.chair.findMany({
+        where: {
+          barbershopId: input.barbershopId,
+          active: true,
+          mode: "GENERAL_BOOKING",
+        },
+        select: { id: true },
+        orderBy: [{ number: "asc" }, { id: "asc" }],
+      })
+
+      if (chairs.length === 0) {
+        return baseEmpty()
+      }
+
+      const slots = await generateSlots(
+        tx,
+        input,
+        timezone,
+        input.mode,
+        input.durationMinutes,
+        openingHour.opensAt,
+        openingHour.closesAt,
+        now,
+        chairs.map((chair) => chair.id),
+        undefined,
+        input.excludeBookingId,
+      )
+
+      return {
+        localDate: input.localDate,
+        timezone,
+        mode: input.mode,
+        serviceDurationMinutes: input.durationMinutes,
         slots,
       }
     },

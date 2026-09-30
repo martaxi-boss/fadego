@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { type FormEvent, useMemo, useState } from "react"
+import { type FormEvent, useState } from "react"
 
 type ServiceOption = {
   id: string
@@ -95,11 +95,6 @@ export default function PublicBookingFlow({
   const [bookingPending, setBookingPending] = useState(false)
   const [successPendingRedirect, setSuccessPendingRedirect] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const selectedService = useMemo(
-    () => services.find((service) => service.id === serviceId) ?? null,
-    [serviceId, services],
-  )
 
   const resetSlots = () => {
     setSlots([])
@@ -257,53 +252,132 @@ export default function PublicBookingFlow({
         <h2 className="mt-2 text-2xl font-semibold">Escolhe o teu horário</h2>
       </div>
 
-      <div className="mt-6 grid gap-5">
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">1. Serviço</span>
-          <select
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 outline-none focus:border-gray-950"
-            value={serviceId}
-            onChange={(event) => {
-              setServiceId(event.target.value)
-              resetSlots()
-            }}
-          >
-            {services.map((service) => (
-              <option key={service.id} value={service.id}>
-                {service.name} · {service.durationMinutes} min ·{" "}
-                {priceLabel(service.price)}
-              </option>
-            ))}
-          </select>
-          {selectedService?.description ? (
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              {selectedService.description}
-            </p>
-          ) : null}
-        </label>
+      <div className="mt-6 grid gap-6">
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium">1. Serviço</legend>
+          <div className="grid gap-3">
+            {services.map((service) => {
+              const selected = serviceId === service.id
+              return (
+                <button
+                  aria-pressed={selected}
+                  className={
+                    selected
+                      ? "rounded-xl border border-gray-950 bg-gray-950 p-4 text-left text-white"
+                      : "rounded-xl border border-gray-200 bg-white p-4 text-left hover:border-gray-500"
+                  }
+                  key={service.id}
+                  onClick={() => {
+                    setServiceId(service.id)
+                    resetSlots()
+                  }}
+                  type="button"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="font-semibold">{service.name}</span>
+                    <span className="shrink-0 text-sm font-semibold">
+                      {priceLabel(service.price)}
+                    </span>
+                  </div>
+                  <p
+                    className={
+                      selected
+                        ? "mt-1 text-sm text-gray-300"
+                        : "mt-1 text-sm text-gray-500"
+                    }
+                  >
+                    {service.durationMinutes} minutos
+                  </p>
+                  {service.description ? (
+                    <p
+                      className={
+                        selected
+                          ? "mt-2 text-sm leading-6 text-gray-200"
+                          : "mt-2 text-sm leading-6 text-gray-600"
+                      }
+                    >
+                      {service.description}
+                    </p>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+        </fieldset>
 
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">
-            2. Atendimento
-          </span>
-          <select
-            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 outline-none focus:border-gray-950"
-            value={method}
-            onChange={(event) => {
-              setMethod(event.target.value)
-              resetSlots()
-            }}
-          >
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium">2. Atendimento</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
             {generalAvailable ? (
-              <option value={GENERAL_METHOD}>Sem preferência</option>
+              <button
+                aria-pressed={method === GENERAL_METHOD}
+                className={
+                  method === GENERAL_METHOD
+                    ? "rounded-xl border border-gray-950 bg-gray-950 p-4 text-left text-white"
+                    : "rounded-xl border border-gray-200 bg-white p-4 text-left hover:border-gray-500"
+                }
+                onClick={() => {
+                  setMethod(GENERAL_METHOD)
+                  resetSlots()
+                }}
+                type="button"
+              >
+                <span className="font-semibold">Sem preferência</span>
+                <p
+                  className={
+                    method === GENERAL_METHOD
+                      ? "mt-1 text-sm text-gray-300"
+                      : "mt-1 text-sm text-gray-500"
+                  }
+                >
+                  Qualquer profissional disponível
+                </p>
+              </button>
             ) : null}
-            {professionals.map((professional) => (
-              <option key={professional.id} value={professional.id}>
-                {professional.name}
-              </option>
-            ))}
-          </select>
-        </label>
+
+            {professionals.map((professional) => {
+              const selected = method === professional.id
+              return (
+                <button
+                  aria-pressed={selected}
+                  className={
+                    selected
+                      ? "flex items-center gap-3 rounded-xl border border-gray-950 bg-gray-950 p-3 text-left text-white"
+                      : "flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left hover:border-gray-500"
+                  }
+                  key={professional.id}
+                  onClick={() => {
+                    setMethod(professional.id)
+                    resetSlots()
+                  }}
+                  type="button"
+                >
+                  {professional.photoUrl ? (
+                    <img
+                      alt=""
+                      className="h-11 w-11 shrink-0 rounded-full object-cover"
+                      height={44}
+                      src={professional.photoUrl}
+                      width={44}
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={
+                        selected
+                          ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15 font-semibold"
+                          : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gray-100 font-semibold"
+                      }
+                    >
+                      {professional.name.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="font-semibold">{professional.name}</span>
+                </button>
+              )
+            })}
+          </div>
+        </fieldset>
 
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium">3. Dia</span>
@@ -360,15 +434,18 @@ export default function PublicBookingFlow({
           </div>
         ) : null}
 
-        <form className="grid gap-4 border-t border-gray-200 pt-5" onSubmit={submitBooking}>
+        <form
+          className="grid gap-4 border-t border-gray-200 pt-5"
+          onSubmit={submitBooking}
+        >
           <p className="text-sm font-medium">5. Os teus dados</p>
           <label className="block">
             <span className="mb-1 block text-sm text-gray-700">Nome</span>
             <input
+              autoComplete="name"
               className="w-full rounded-xl border border-gray-300 px-3 py-3 outline-none focus:border-gray-950"
               maxLength={120}
               name="name"
-              autoComplete="name"
               required
             />
           </label>
@@ -377,12 +454,12 @@ export default function PublicBookingFlow({
               Telemóvel / telefone
             </span>
             <input
+              autoComplete="tel"
               className="w-full rounded-xl border border-gray-300 px-3 py-3 outline-none focus:border-gray-950"
               maxLength={32}
               name="phone"
-              type="tel"
-              autoComplete="tel"
               required
+              type="tel"
             />
           </label>
           <label className="block">
@@ -390,22 +467,28 @@ export default function PublicBookingFlow({
               Email <span className="text-gray-400">(opcional)</span>
             </span>
             <input
+              autoComplete="email"
               className="w-full rounded-xl border border-gray-300 px-3 py-3 outline-none focus:border-gray-950"
               maxLength={254}
               name="email"
               type="email"
-              autoComplete="email"
             />
           </label>
 
           {error ? (
-            <p className="rounded-xl bg-red-50 p-3 text-sm text-red-800" role="alert">
+            <p
+              className="rounded-xl bg-red-50 p-3 text-sm text-red-800"
+              role="alert"
+            >
               {error}
             </p>
           ) : null}
 
           {successPendingRedirect ? (
-            <p className="rounded-xl bg-green-50 p-3 text-sm text-green-800" role="status">
+            <p
+              className="rounded-xl bg-green-50 p-3 text-sm text-green-800"
+              role="status"
+            >
               Marcação confirmada. A abrir o teu acesso privado...
             </p>
           ) : null}

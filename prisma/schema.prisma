@@ -72,9 +72,10 @@ model Barbershop {
   chairs          Chair[]
   services        Service[]
   openingHours    OpeningHour[]
-  customers       Customer[]
-  bookings        Booking[]
-  createdAt       DateTime           @default(now())
+  customers           Customer[]
+  bookings            Booking[]
+  bookingAccessTokens BookingAccessToken[]
+  createdAt           DateTime             @default(now())
   updatedAt       DateTime           @updatedAt
 }
 
@@ -216,13 +217,30 @@ model Booking {
   customer    Customer     @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
   service     Service      @relation("BookingService", fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
   chair       Chair        @relation("BookingChair", fields: [chairId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  staffMember StaffMember? @relation("BookingStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  staffMember  StaffMember?        @relation("BookingStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  accessTokens BookingAccessToken[]
 
   @@unique([id, barbershopId])
   @@index([barbershopId, status, startsAt])
   @@index([chairId, startsAt, endsAt])
   @@index([staffMemberId, startsAt, endsAt])
   @@index([customerId, startsAt])
+}
+
+model BookingAccessToken {
+  id           String    @id @default(uuid())
+  barbershopId String
+  bookingId    String
+  tokenHash    String    @unique @db.VarChar(64)
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  booking    Booking    @relation(fields: [bookingId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@unique([id, barbershopId])
+  @@index([barbershopId, bookingId])
+  @@index([revokedAt])
 }
 
 model RateLimit {

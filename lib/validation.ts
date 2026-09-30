@@ -1,7 +1,17 @@
 import { z } from "zod"
 
+export const normalizeAdminEmail = (value: string) =>
+  value.trim().toLowerCase()
+
+export const adminEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email()
+  .max(254)
+
 export const credentialsSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
+  email: adminEmailSchema,
   password: z.string().min(1).max(512),
 })
 

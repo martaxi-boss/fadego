@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "builder/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fadego
+          POSTGRES_PASSWORD: fadego_ci_only
+          POSTGRES_DB: fadego
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fadego -d fadego"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://fadego:fadego_ci_only@localhost:5432/fadego?schema=public
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ci-placeholder-not-a-production-secret
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.14.0 --activate
+          pnpm --version
+
+      - name: Install from lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma format
+        run: |
+          pnpm prisma format
+          git diff --exit-code -- prisma/schema.prisma
+
+      - name: Prisma validate
+        run: pnpm prisma validate
+
+      - name: Apply migrations to PostgreSQL
+        run: |
+          pnpm prisma migrate deploy
+          pnpm prisma migrate status
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Secret scan
+        run: pnpm secret:scan

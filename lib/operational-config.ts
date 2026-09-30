@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client"
 import { db } from "@/lib/prisma"
 import type {
   ChairInput,
@@ -20,23 +21,79 @@ export class OperationalConfigError extends Error {
   }
 }
 
-const requireStaffForNewAssignment = async (
+type LockedStaffMember = {
+  id: string
+  active: boolean
+  archivedAt: Date | null
+}
+
+type LockedChair = {
+  id: string
+  mode: "WALK_IN" | "GENERAL_BOOKING" | "STAFF_BOOKING"
+  staffMemberId: string | null
+}
+
+const lockStaffForAssignment = async (
+  tx: Prisma.TransactionClient,
   barbershopId: string,
   staffMemberId: string,
 ) => {
-  const staffMember = await db.staffMember.findUnique({
-    where: {
-      id_barbershopId: {
-        id: staffMemberId,
-        barbershopId,
-      },
-    },
-    select: {
-      id: true,
-      active: true,
-      archivedAt: true,
-    },
-  })
+  const rows = await tx.$queryRaw<LockedStaffMember[]>\`
+    /* fadego:staff-assignment-lock */
+    SELECT "id", "active", "archivedAt"
+    FROM "StaffMember"
+    WHERE "id" = \${staffMemberId}
+      AND "barbershopId" = \${barbershopId}
+    FOR UPDATE
+  \`
+
+  return rows[0] ?? null
+}
+
+const lockStaffForLifecycle = async (
+  tx: Prisma.TransactionClient,
+  barbershopId: string,
+  staffMemberId: string,
+) => {
+  const rows = await tx.$queryRaw<LockedStaffMember[]>\`
+    /* fadego:staff-lifecycle-lock */
+    SELECT "id", "active", "archivedAt"
+    FROM "StaffMember"
+    WHERE "id" = \${staffMemberId}
+      AND "barbershopId" = \${barbershopId}
+    FOR UPDATE
+  \`
+
+  return rows[0] ?? null
+}
+
+const lockChairForConfiguration = async (
+  tx: Prisma.TransactionClient,
+  barbershopId: string,
+  chairId: string,
+) => {
+  const rows = await tx.$queryRaw<LockedChair[]>\`
+    /* fadego:chair-configuration-lock */
+    SELECT "id", "mode", "staffMemberId"
+    FROM "Chair"
+    WHERE "id" = \${chairId}
+      AND "barbershopId" = \${barbershopId}
+    FOR UPDATE
+  \`
+
+  return rows[0] ?? null
+}
+
+const requireLockedStaffForNewAssignment = async (
+  tx: Prisma.TransactionClient,
+  barbershopId: string,
+  staffMemberId: string,
+) => {
+  const staffMember = await lockStaffForAssignment(
+    tx,
+    barbershopId,
+    staffMemberId,
+  )
 
   if (!staffMember?.active || staffMember.archivedAt) {
     throw new OperationalConfigError("INVALID_ASSIGNMENT")
@@ -72,48 +129,38 @@ export const updateStaffMember = async (
   id: string,
   input: StaffUpdateInput,
 ) => {
-  const current = await db.staffMember.findUnique({
-    where: {
-      id_barbershopId: {
-        id,
-        barbershopId,
-      },
-    },
-    select: {
-      id: true,
-      active: true,
-      archivedAt: true,
-    },
-  })
-
-  if (!current) {
-    throw new OperationalConfigError("NOT_FOUND")
-  }
-
   if (input.archived && input.active) {
     throw new OperationalConfigError("INVALID_LIFECYCLE")
   }
 
-  if (current.archivedAt && input.active) {
-    throw new OperationalConfigError("INVALID_LIFECYCLE")
-  }
+  return db.$transaction(async (tx) => {
+    const current = await lockStaffForLifecycle(tx, barbershopId, id)
 
-  const archivedAt =
-    current.archivedAt ?? (input.archived ? new Date() : null)
+    if (!current) {
+      throw new OperationalConfigError("NOT_FOUND")
+    }
 
-  return db.staffMember.update({
-    where: {
-      id_barbershopId: {
-        id,
-        barbershopId,
+    if (current.archivedAt && input.active) {
+      throw new OperationalConfigError("INVALID_LIFECYCLE")
+    }
+
+    const archivedAt =
+      current.archivedAt ?? (input.archived ? new Date() : null)
+
+    return tx.staffMember.update({
+      where: {
+        id_barbershopId: {
+          id,
+          barbershopId,
+        },
       },
-    },
-    data: {
-      name: input.name,
-      photoUrl: input.photoUrl,
-      active: archivedAt ? false : input.active,
-      archivedAt,
-    },
+      data: {
+        name: input.name,
+        photoUrl: input.photoUrl,
+        active: archivedAt ? false : input.active,
+        archivedAt,
+      },
+    })
   })
 }
 
@@ -123,19 +170,33 @@ export const createChairConfiguration = async (
 ) => {
   validateChairShape(input)
 
-  if (input.mode === "STAFF_BOOKING" && input.staffMemberId) {
-    await requireStaffForNewAssignment(barbershopId, input.staffMemberId)
+  const staffMemberId = input.staffMemberId
+  if (input.mode !== "STAFF_BOOKING" || !staffMemberId) {
+    return db.chair.create({
+      data: {
+        barbershopId,
+        number: input.number,
+        name: input.name,
+        mode: input.mode,
+        staffMemberId,
+        active: input.active,
+      },
+    })
   }
 
-  return db.chair.create({
-    data: {
-      barbershopId,
-      number: input.number,
-      name: input.name,
-      mode: input.mode,
-      staffMemberId: input.staffMemberId,
-      active: input.active,
-    },
+  return db.$transaction(async (tx) => {
+    await requireLockedStaffForNewAssignment(tx, barbershopId, staffMemberId)
+
+    return tx.chair.create({
+      data: {
+        barbershopId,
+        number: input.number,
+        name: input.name,
+        mode: input.mode,
+        staffMemberId,
+        active: input.active,
+      },
+    })
   })
 }
 
@@ -146,48 +207,42 @@ export const updateChairConfiguration = async (
 ) => {
   validateChairShape(input)
 
-  const current = await db.chair.findUnique({
-    where: {
-      id_barbershopId: {
-        id,
-        barbershopId,
-      },
-    },
-    select: {
-      id: true,
-      mode: true,
-      staffMemberId: true,
-    },
-  })
+  return db.$transaction(async (tx) => {
+    const current = await lockChairForConfiguration(tx, barbershopId, id)
 
-  if (!current) {
-    throw new OperationalConfigError("NOT_FOUND")
-  }
-
-  if (input.mode === "STAFF_BOOKING" && input.staffMemberId) {
-    const preservesExistingAssignment =
-      current.mode === "STAFF_BOOKING" &&
-      current.staffMemberId === input.staffMemberId
-
-    if (!preservesExistingAssignment) {
-      await requireStaffForNewAssignment(barbershopId, input.staffMemberId)
+    if (!current) {
+      throw new OperationalConfigError("NOT_FOUND")
     }
-  }
 
-  return db.chair.update({
-    where: {
-      id_barbershopId: {
-        id,
-        barbershopId,
+    if (input.mode === "STAFF_BOOKING" && input.staffMemberId) {
+      const preservesExistingAssignment =
+        current.mode === "STAFF_BOOKING" &&
+        current.staffMemberId === input.staffMemberId
+
+      if (!preservesExistingAssignment) {
+        await requireLockedStaffForNewAssignment(
+          tx,
+          barbershopId,
+          input.staffMemberId,
+        )
+      }
+    }
+
+    return tx.chair.update({
+      where: {
+        id_barbershopId: {
+          id,
+          barbershopId,
+        },
       },
-    },
-    data: {
-      number: input.number,
-      name: input.name,
-      mode: input.mode,
-      staffMemberId: input.staffMemberId,
-      active: input.active,
-    },
+      data: {
+        number: input.number,
+        name: input.name,
+        mode: input.mode,
+        staffMemberId: input.staffMemberId,
+        active: input.active,
+      },
+    })
   })
 }
 

@@ -135,6 +135,8 @@ export type PrivateBookingProjection = {
   durationMinutes: number
   professionalName: string | null
   customerName: string
+  canCancel: boolean
+  canReschedule: boolean
   status:
     | "CONFIRMED"
     | "COMPLETED"
@@ -550,6 +552,10 @@ export const lookupPrivateBooking = async (
       durationMinutes: access.booking.serviceDurationMinutes,
       professionalName: access.booking.staffNameSnapshot,
       customerName: access.booking.customerNameSnapshot,
+      canCancel:
+        access.booking.status === "CONFIRMED" ||
+        access.booking.status === "NEEDS_REASSIGNMENT",
+      canReschedule: access.booking.status === "CONFIRMED",
       status: access.booking.status,
     },
   }

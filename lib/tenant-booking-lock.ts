@@ -16,8 +16,6 @@ export const acquireTenantBookingLock = async (
 ) => {
   await tx.$queryRaw<{ locked: number }[]>`
     SELECT 1::int AS "locked"
-    FROM (
-      SELECT pg_advisory_xact_lock(hashtextextended(${barbershopId}, 0))
-    ) AS acquired
+    FROM pg_advisory_xact_lock(hashtextextended(${barbershopId}, 0))
   `
 }

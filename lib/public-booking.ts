@@ -26,7 +26,6 @@ import {
   hashRateLimitKey,
   type RateLimitName,
 } from "@/lib/rate-limit"
-import { acquireTenantBookingLock } from "@/lib/tenant-booking-lock"
 import { barbershopSlugSchema } from "@/lib/validation"
 
 const publicEmailSchema = z.preprocess(
@@ -408,8 +407,6 @@ export const createPublicBooking = async (
       if (!authoritativeTenant || authoritativeTenant.status !== "ACTIVE") {
         throw new BookingEngineError("TENANT_UNAVAILABLE")
       }
-
-      await acquireTenantBookingLock(tx, authoritativeTenant.id)
 
       const customer = await createCustomer(
         tx,

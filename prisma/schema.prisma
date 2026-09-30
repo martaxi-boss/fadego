@@ -29,6 +29,20 @@ enum ChairMode {
   STAFF_BOOKING
 }
 
+enum BookingStatus {
+  CONFIRMED
+  COMPLETED
+  CANCELLED_BY_CUSTOMER
+  CANCELLED_BY_SHOP
+  NO_SHOW
+  NEEDS_REASSIGNMENT
+}
+
+enum BookingMode {
+  GENERAL_BOOKING
+  STAFF_BOOKING
+}
+
 model User {
   id           String             @id @default(uuid())
   name         String?
@@ -51,12 +65,15 @@ model Barbershop {
   phone           String?
   instagram       String?
   officialWebsite String?
+  timezone        String?            @db.VarChar(255)
   status          BarbershopStatus   @default(ACTIVE)
   members         BarbershopMember[]
   staffMembers    StaffMember[]
   chairs          Chair[]
   services        Service[]
   openingHours    OpeningHour[]
+  customers       Customer[]
+  bookings        Booking[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 }
@@ -94,6 +111,7 @@ model StaffMember {
   barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
   user       User?      @relation(fields: [userId], references: [id], onDelete: Restrict)
   chairs     Chair[]    @relation("ChairStaffMember")
+  bookings   Booking[]  @relation("BookingStaffMember")
 
   @@unique([id, barbershopId])
   @@unique([barbershopId, userId])
@@ -113,6 +131,7 @@ model Chair {
 
   barbershop  Barbershop   @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
   staffMember StaffMember? @relation("ChairStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  bookings    Booking[]    @relation("BookingChair")
 
   @@unique([barbershopId, number])
   @@unique([id, barbershopId])
@@ -131,6 +150,7 @@ model Service {
   updatedAt       DateTime @updatedAt
 
   barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  bookings   Booking[]  @relation("BookingService")
 
   @@unique([id, barbershopId])
   @@index([barbershopId, active])
@@ -151,6 +171,58 @@ model OpeningHour {
   @@unique([barbershopId, weekday])
   @@unique([id, barbershopId])
   @@index([barbershopId])
+}
+
+model Customer {
+  id           String   @id @default(uuid())
+  barbershopId String
+  name         String
+  phone        String
+  email        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  bookings   Booking[]
+
+  @@unique([id, barbershopId])
+  @@index([barbershopId, phone])
+  @@index([barbershopId, email])
+}
+
+model Booking {
+  id                     String        @id @default(uuid())
+  barbershopId           String
+  customerId             String
+  serviceId              String
+  chairId                String
+  staffMemberId          String?
+  mode                   BookingMode
+  startsAt               DateTime      @db.Timestamptz(3)
+  endsAt                 DateTime      @db.Timestamptz(3)
+  status                 BookingStatus @default(CONFIRMED)
+  serviceNameSnapshot    String
+  serviceDurationMinutes Int
+  servicePriceSnapshot   Decimal       @db.Decimal(10, 2)
+  customerNameSnapshot   String
+  customerPhoneSnapshot  String
+  customerEmailSnapshot  String?
+  staffNameSnapshot      String?
+  chairNumberSnapshot    Int
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  barbershop  Barbershop   @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  customer    Customer     @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  service     Service      @relation("BookingService", fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  chair       Chair        @relation("BookingChair", fields: [chairId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  staffMember StaffMember? @relation("BookingStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@unique([id, barbershopId])
+  @@index([barbershopId, status, startsAt])
+  @@index([chairId, startsAt, endsAt])
+  @@index([staffMemberId, startsAt, endsAt])
+  @@index([customerId, startsAt])
 }
 
 model RateLimit {

@@ -205,7 +205,7 @@ test("assignment first serial order permits later deactivation and preserves the
       archived: false,
     })
 
-    await waitForBlockedQuery(observer, "fadego:staff-lifecycle-lock")
+    await waitForBlockedQuery(observer, "pg_advisory_xact_lock")
 
     await chairTableBlocker.query("COMMIT")
     transactionOpen = false

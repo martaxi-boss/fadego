@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client"
 import { db } from "@/lib/prisma"
+import { acquireTenantBookingLock } from "@/lib/tenant-booking-lock"
 import type {
   ChairInput,
   OpeningHourInput,
@@ -134,6 +135,7 @@ export const updateStaffMember = async (
   }
 
   return db.$transaction(async (tx) => {
+    await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockStaffForLifecycle(tx, barbershopId, id)
 
     if (!current) {
@@ -146,8 +148,9 @@ export const updateStaffMember = async (
 
     const archivedAt =
       current.archivedAt ?? (input.archived ? new Date() : null)
+    const active = archivedAt ? false : input.active
 
-    return tx.staffMember.update({
+    const updated = await tx.staffMember.update({
       where: {
         id_barbershopId: {
           id,
@@ -157,10 +160,27 @@ export const updateStaffMember = async (
       data: {
         name: input.name,
         photoUrl: input.photoUrl,
-        active: archivedAt ? false : input.active,
+        active,
         archivedAt,
       },
     })
+
+    if (!active || archivedAt) {
+      await tx.booking.updateMany({
+        where: {
+          barbershopId,
+          staffMemberId: id,
+          mode: "STAFF_BOOKING",
+          status: "CONFIRMED",
+          startsAt: { gt: new Date() },
+        },
+        data: {
+          status: "NEEDS_REASSIGNMENT",
+        },
+      })
+    }
+
+    return updated
   })
 }
 
@@ -170,22 +190,13 @@ export const createChairConfiguration = async (
 ) => {
   validateChairShape(input)
 
-  const staffMemberId = input.staffMemberId
-  if (input.mode !== "STAFF_BOOKING" || !staffMemberId) {
-    return db.chair.create({
-      data: {
-        barbershopId,
-        number: input.number,
-        name: input.name,
-        mode: input.mode,
-        staffMemberId,
-        active: input.active,
-      },
-    })
-  }
-
   return db.$transaction(async (tx) => {
-    await requireLockedStaffForNewAssignment(tx, barbershopId, staffMemberId)
+    await acquireTenantBookingLock(tx, barbershopId)
+
+    const staffMemberId = input.staffMemberId
+    if (input.mode === "STAFF_BOOKING" && staffMemberId) {
+      await requireLockedStaffForNewAssignment(tx, barbershopId, staffMemberId)
+    }
 
     return tx.chair.create({
       data: {
@@ -208,6 +219,7 @@ export const updateChairConfiguration = async (
   validateChairShape(input)
 
   return db.$transaction(async (tx) => {
+    await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockChairForConfiguration(tx, barbershopId, id)
 
     if (!current) {
@@ -250,81 +262,44 @@ export const createServiceConfiguration = async (
   barbershopId: string,
   input: ServiceInput,
 ) =>
-  db.service.create({
-    data: {
-      barbershopId,
-      name: input.name,
-      description: input.description,
-      price: input.price,
-      durationMinutes: input.durationMinutes,
-      active: input.active,
-    },
+  db.$transaction(async (tx) => {
+    await acquireTenantBookingLock(tx, barbershopId)
+
+    return tx.service.create({
+      data: {
+        barbershopId,
+        name: input.name,
+        description: input.description,
+        price: input.price,
+        durationMinutes: input.durationMinutes,
+        active: input.active,
+      },
+    })
   })
 
 export const updateServiceConfiguration = async (
   barbershopId: string,
   id: string,
   input: ServiceInput,
-) => {
-  const current = await db.service.findUnique({
-    where: {
-      id_barbershopId: {
-        id,
-        barbershopId,
-      },
-    },
-    select: { id: true },
-  })
+) =>
+  db.$transaction(async (tx) => {
+    await acquireTenantBookingLock(tx, barbershopId)
 
-  if (!current) {
-    throw new OperationalConfigError("NOT_FOUND")
-  }
-
-  return db.service.update({
-    where: {
-      id_barbershopId: {
-        id,
-        barbershopId,
-      },
-    },
-    data: {
-      name: input.name,
-      description: input.description,
-      price: input.price,
-      durationMinutes: input.durationMinutes,
-      active: input.active,
-    },
-  })
-}
-
-export const saveOpeningHourConfiguration = async (
-  barbershopId: string,
-  id: string | null,
-  input: OpeningHourInput,
-) => {
-  if (id) {
-    const current = await db.openingHour.findUnique({
+    const current = await tx.service.findUnique({
       where: {
         id_barbershopId: {
           id,
           barbershopId,
         },
       },
-      select: {
-        id: true,
-        weekday: true,
-      },
+      select: { id: true },
     })
 
     if (!current) {
       throw new OperationalConfigError("NOT_FOUND")
     }
 
-    if (current.weekday !== input.weekday) {
-      throw new OperationalConfigError("INVALID_CONFIGURATION")
-    }
-
-    return db.openingHour.update({
+    return tx.service.update({
       where: {
         id_barbershopId: {
           id,
@@ -332,20 +307,67 @@ export const saveOpeningHourConfiguration = async (
         },
       },
       data: {
+        name: input.name,
+        description: input.description,
+        price: input.price,
+        durationMinutes: input.durationMinutes,
+        active: input.active,
+      },
+    })
+  })
+
+export const saveOpeningHourConfiguration = async (
+  barbershopId: string,
+  id: string | null,
+  input: OpeningHourInput,
+) =>
+  db.$transaction(async (tx) => {
+    await acquireTenantBookingLock(tx, barbershopId)
+
+    if (id) {
+      const current = await tx.openingHour.findUnique({
+        where: {
+          id_barbershopId: {
+            id,
+            barbershopId,
+          },
+        },
+        select: {
+          id: true,
+          weekday: true,
+        },
+      })
+
+      if (!current) {
+        throw new OperationalConfigError("NOT_FOUND")
+      }
+
+      if (current.weekday !== input.weekday) {
+        throw new OperationalConfigError("INVALID_CONFIGURATION")
+      }
+
+      return tx.openingHour.update({
+        where: {
+          id_barbershopId: {
+            id,
+            barbershopId,
+          },
+        },
+        data: {
+          isClosed: input.isClosed,
+          opensAt: input.opensAt,
+          closesAt: input.closesAt,
+        },
+      })
+    }
+
+    return tx.openingHour.create({
+      data: {
+        barbershopId,
+        weekday: input.weekday,
         isClosed: input.isClosed,
         opensAt: input.opensAt,
         closesAt: input.closesAt,
       },
     })
-  }
-
-  return db.openingHour.create({
-    data: {
-      barbershopId,
-      weekday: input.weekday,
-      isClosed: input.isClosed,
-      opensAt: input.opensAt,
-      closesAt: input.closesAt,
-    },
   })
-}

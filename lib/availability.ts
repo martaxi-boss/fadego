@@ -417,12 +417,12 @@ export const getAvailability = async (
       })
 
       if (!barbershop || barbershop.status !== "ACTIVE") {
-        fail("TENANT_UNAVAILABLE")
+        throw new AvailabilityError("TENANT_UNAVAILABLE")
       }
 
       const timezone = barbershop.timezone
       if (!timezone || !isValidTimezone(timezone)) {
-        fail("TIMEZONE_UNAVAILABLE")
+        throw new AvailabilityError("TIMEZONE_UNAVAILABLE")
       }
 
       const service = await tx.service.findUnique({
@@ -445,15 +445,16 @@ export const getAvailability = async (
         service.durationMinutes <= 0 ||
         service.durationMinutes % 15 !== 0
       ) {
-        fail("SERVICE_UNAVAILABLE")
+        throw new AvailabilityError("SERVICE_UNAVAILABLE")
       }
 
+      const serviceDurationMinutes = service.durationMinutes
       const baseEmpty = () =>
         emptyResult(
           input.localDate,
           timezone,
           mode,
-          service.durationMinutes,
+          serviceDurationMinutes,
         )
 
       const openingHour = await tx.openingHour.findUnique({
@@ -518,7 +519,7 @@ export const getAvailability = async (
           input,
           timezone,
           mode,
-          service.durationMinutes,
+          serviceDurationMinutes,
           openingHour.opensAt,
           openingHour.closesAt,
           now,
@@ -530,7 +531,7 @@ export const getAvailability = async (
           localDate: input.localDate,
           timezone,
           mode,
-          serviceDurationMinutes: service.durationMinutes,
+          serviceDurationMinutes: serviceDurationMinutes,
           slots,
         }
       }
@@ -554,7 +555,7 @@ export const getAvailability = async (
         input,
         timezone,
         mode,
-        service.durationMinutes,
+        serviceDurationMinutes,
         openingHour.opensAt,
         openingHour.closesAt,
         now,
@@ -565,7 +566,7 @@ export const getAvailability = async (
         localDate: input.localDate,
         timezone,
         mode,
-        serviceDurationMinutes: service.durationMinutes,
+        serviceDurationMinutes: serviceDurationMinutes,
         slots,
       }
     },

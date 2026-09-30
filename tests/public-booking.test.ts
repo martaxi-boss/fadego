@@ -281,6 +281,32 @@ test("SUSPENDED and ARCHIVED tenants do not resolve public booking catalog", asy
   assert.equal(await getPublicCatalog(archived.shop.slug), null)
 })
 
+test("SUSPENDED and ARCHIVED tenants cannot create public bookings", async () => {
+  const suspended = await createFixture("create-suspended", {
+    status: "SUSPENDED",
+  })
+  const archived = await createFixture("create-archived", {
+    status: "ARCHIVED",
+  })
+  await addGeneralChair(suspended.shop.id)
+  await addGeneralChair(archived.shop.id)
+
+  assert.deepEqual(await createPublic(suspended), {
+    ok: false,
+    code: "TENANT_UNAVAILABLE",
+  })
+  assert.deepEqual(await createPublic(archived), {
+    ok: false,
+    code: "TENANT_UNAVAILABLE",
+  })
+  assert.equal(
+    await db.customer.count({
+      where: { barbershopId: { in: [suspended.shop.id, archived.shop.id] } },
+    }),
+    0,
+  )
+})
+
 test("WALK_IN never creates a public GENERAL option and active GENERAL does", async () => {
   const fixture = await createFixture("general-option")
   await addWalkInChair(fixture.shop.id, 1)
@@ -549,6 +575,36 @@ test("raw access code is absent from storage and hash lookup resolves snapshots"
     assert.equal(resolved.booking.localDate, "2030-01-07")
     assert.equal(resolved.booking.localTime, "09:00")
   }
+})
+
+test("access code is not a Booking or Customer id derivative", async () => {
+  const fixture = await createFixture("token-id-derivative")
+  await addGeneralChair(fixture.shop.id)
+
+  const result = await createPublic(
+    fixture,
+    "2030-01-07T09:00:00.000Z",
+    undefined,
+    { accessCodeGenerator: () => "7K4M2QX8" },
+  )
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+
+  const token = await db.bookingAccessToken.findUnique({
+    where: { tokenHash: hashAccessCode(result.accessCode) },
+    select: {
+      bookingId: true,
+      booking: {
+        select: { customerId: true },
+      },
+    },
+  })
+  assert.ok(token)
+  assert.notEqual(result.accessCode, token.bookingId.slice(0, ACCESS_CODE_LENGTH).toUpperCase())
+  assert.notEqual(
+    result.accessCode,
+    token.booking.customerId.slice(0, ACCESS_CODE_LENGTH).toUpperCase(),
+  )
 })
 
 test("private projection remains snapshot-based after source records change", async () => {

@@ -57,26 +57,26 @@ model User {
 }
 
 model Barbershop {
-  id              String             @id @default(uuid())
-  name            String
-  slug            String             @unique @db.VarChar(63)
-  logoUrl         String?
-  address         String?
-  phone           String?
-  instagram       String?
-  officialWebsite String?
-  timezone        String?            @db.VarChar(255)
-  status          BarbershopStatus   @default(ACTIVE)
-  members         BarbershopMember[]
-  staffMembers    StaffMember[]
-  chairs          Chair[]
-  services        Service[]
-  openingHours    OpeningHour[]
+  id                  String               @id @default(uuid())
+  name                String
+  slug                String               @unique @db.VarChar(63)
+  logoUrl             String?
+  address             String?
+  phone               String?
+  instagram           String?
+  officialWebsite     String?
+  timezone            String?              @db.VarChar(255)
+  status              BarbershopStatus     @default(ACTIVE)
+  members             BarbershopMember[]
+  staffMembers        StaffMember[]
+  chairs              Chair[]
+  services            Service[]
+  openingHours        OpeningHour[]
   customers           Customer[]
   bookings            Booking[]
   bookingAccessTokens BookingAccessToken[]
   createdAt           DateTime             @default(now())
-  updatedAt       DateTime           @updatedAt
+  updatedAt           DateTime             @updatedAt
 }
 
 model BarbershopMember {
@@ -213,11 +213,11 @@ model Booking {
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
-  barbershop  Barbershop   @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  customer    Customer     @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  service     Service      @relation("BookingService", fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  chair       Chair        @relation("BookingChair", fields: [chairId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  staffMember  StaffMember?        @relation("BookingStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  barbershop   Barbershop           @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  customer     Customer             @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  service      Service              @relation("BookingService", fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  chair        Chair                @relation("BookingChair", fields: [chairId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  staffMember  StaffMember?         @relation("BookingStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
   accessTokens BookingAccessToken[]
 
   @@unique([id, barbershopId])

@@ -10,6 +10,7 @@ import {
   hashAccessCode,
 } from "../lib/booking-access"
 import {
+  cancelBookingByCustomer,
   createBooking,
   type BookingClock,
 } from "../lib/booking-engine"
@@ -791,4 +792,116 @@ test("source IP helper treats forwarding headers only as a bounded anti-abuse si
   })
   assert.equal(sourceIpFromHeaders(headers), "198.51.100.44")
   assert.equal(sourceIpFromHeaders(new Headers()), "unknown")
+})
+
+
+test("one active access token per Booking is enforced and cancellation preserves access history", async () => {
+  const fixture = await createFixture("token-history")
+  await addGeneralChair(fixture.shop.id)
+
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+
+  const token = await db.bookingAccessToken.findUnique({
+    where: { tokenHash: hashAccessCode(created.accessCode) },
+    select: { id: true, bookingId: true },
+  })
+  assert.ok(token)
+
+  await assert.rejects(() =>
+    db.bookingAccessToken.create({
+      data: {
+        barbershopId: fixture.shop.id,
+        bookingId: token.bookingId,
+        tokenHash: hashAccessCode("UVWXYZ23"),
+      },
+    }),
+  )
+
+  await cancelBookingByCustomer(fixture.shop.id, token.bookingId)
+
+  assert.equal(
+    await db.bookingAccessToken.count({
+      where: {
+        barbershopId: fixture.shop.id,
+        bookingId: token.bookingId,
+      },
+    }),
+    1,
+  )
+
+  const privateResult = await lookup(created.accessCode)
+  assert.equal(privateResult.ok, true)
+  if (privateResult.ok) {
+    assert.equal(privateResult.booking.status, "CANCELLED_BY_CUSTOMER")
+  }
+})
+
+test("production access codes are not Booking-id derivatives", async () => {
+  const fixture = await createFixture("token-nonderivative")
+  await addGeneralChair(fixture.shop.id)
+
+  const first = await createPublic(
+    fixture,
+    "2030-01-07T09:00:00.000Z",
+  )
+  const second = await createPublic(
+    fixture,
+    "2030-01-07T10:00:00.000Z",
+  )
+  assert.equal(first.ok, true)
+  assert.equal(second.ok, true)
+  if (!first.ok || !second.ok) return
+
+  assert.notEqual(first.accessCode, second.accessCode)
+
+  const bookings = await db.booking.findMany({
+    where: { barbershopId: fixture.shop.id },
+    select: { id: true },
+  })
+
+  for (const booking of bookings) {
+    const canonicalId = booking.id.replace(/-/g, "").toUpperCase()
+    assert.equal(canonicalId.includes(first.accessCode), false)
+    assert.equal(canonicalId.includes(second.accessCode), false)
+  }
+
+  const source = readFileSync("lib/booking-access.ts", "utf8")
+  const generatorStart = source.indexOf("export const generateAccessCode")
+  const canonicalizerStart = source.indexOf("export const canonicalizeAccessCode")
+  assert.ok(generatorStart >= 0)
+  assert.ok(canonicalizerStart > generatorStart)
+  const generatorSource = source.slice(generatorStart, canonicalizerStart)
+  assert.match(generatorSource, /randomBytes/)
+  assert.equal(generatorSource.includes("bookingId"), false)
+  assert.equal(generatorSource.includes("customerId"), false)
+  assert.equal(generatorSource.includes("Date.now"), false)
+})
+
+test("public application surfaces wire canonical availability to booking and keep private page read-only", () => {
+  const flow = readFileSync(
+    "app/b/[slug]/public-booking-flow.tsx",
+    "utf8",
+  )
+  const publicPage = readFileSync("app/b/[slug]/page.tsx", "utf8")
+  const privatePage = readFileSync("app/r/[code]/page.tsx", "utf8")
+
+  assert.match(flow, /\/availability/)
+  assert.match(flow, /\/bookings/)
+  assert.match(flow, /router\.push\(payload\.accessPath\)/)
+  assert.match(flow, /name="name"/)
+  assert.match(flow, /name="phone"/)
+  assert.match(flow, /name="email"/)
+  assert.match(publicPage, /getPublicCatalog/)
+  assert.match(privatePage, /lookupPrivateBooking/)
+  assert.match(privatePage, /index:\s*false/)
+  assert.match(privatePage, /follow:\s*false/)
+  assert.match(privatePage, /dynamic = "force-dynamic"/)
+  assert.match(
+    privatePage,
+    /Guarda este acesso para cancelar ou remarcar a tua marcação/,
+  )
+  assert.equal(privatePage.includes("cancelBookingByCustomer"), false)
+  assert.equal(privatePage.includes("rescheduleBooking"), false)
 })

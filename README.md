@@ -1,8 +1,8 @@
 # FADEGO
 
-FADEGO is a multi-tenant web/PWA foundation for autonomous barbershop operations.
+FADEGO is a multi-tenant web/PWA for autonomous barbershop operations.
 
-This branch implements only the Phase-1 application foundation: administrative authentication, tenant membership authorization, Prisma/PostgreSQL persistence, rate-limit infrastructure, an administrative shell, tests, and CI. Booking, chair, staff operations, services, customers, memberships, payments, DNS, and deployment are intentionally absent.
+The current implementation contains the accepted Phase-1 foundation plus the operational configuration layer for tenant-scoped professionals, chairs, services, and weekly opening hours. Booking, customers, capacity/overlap logic, memberships, payments, DNS, deployment, and production infrastructure remain intentionally outside this gate.
 
 ## Stack
 
@@ -25,8 +25,10 @@ This branch implements only the Phase-1 application foundation: administrative a
 
 No public self-registration exists. Administrative users must be provisioned through an authorized administrative/bootstrap process outside this gate; passwords stored in `User.passwordHash` must use the supplied scrypt format.
 
+Operational configuration writes are restricted to active tenant OWNER/ADMIN memberships. STAFF may read the tenant configuration but cannot mutate professionals, chairs, services, or opening hours.
+
 ## Validation
 
-`pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm prisma validate`, and `pnpm secret:scan` are exercised by CI against PostgreSQL.
+`pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm prisma validate`, migration deployment/status, and `pnpm secret:scan` are exercised by CI against PostgreSQL.
 
 See `THIRD_PARTY_NOTICES.md` and `docs/REUSE_SOURCES.md` for provenance.

@@ -185,10 +185,10 @@ export default function PublicBookingFlow({
 
       if (!payload.ok) {
         if (payload.code === "SLOT_UNAVAILABLE") {
+          await loadAvailability()
           setError(
             "Esse horário acabou de ficar indisponível. Escolhe outro horário.",
           )
-          await loadAvailability()
           return
         }
 

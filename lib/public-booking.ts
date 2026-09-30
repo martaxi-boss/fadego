@@ -191,16 +191,19 @@ const resolveActiveTenant = async (slug: string) => {
   return tenant?.status === "ACTIVE" ? tenant : null
 }
 
+const normalizedPhoneRateSignal = (phone: string) =>
+  phone.replace(/[^+0-9]/g, "")
+
 export const buildPublicCreateRateLimitKey = (
   barbershopId: string,
   sourceIp: string,
-  normalizedPhone: string,
+  phone: string,
 ) =>
   hashRateLimitKey(
     "public-booking-create",
     barbershopId,
     sourceIp,
-    normalizedPhone,
+    normalizedPhoneRateSignal(phone),
   )
 
 export const buildPrivateLookupRateLimitKey = (sourceIp: string) =>

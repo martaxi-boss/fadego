@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
-import { after, test } from "node:test"
+import { after, before, test } from "node:test"
 import type { PoolClient } from "pg"
+
+type PrismaRuntime = typeof import("../lib/prisma")
+type OperationalRuntime = typeof import("../lib/operational-config")
 
 const databaseUrl = process.env.DATABASE_URL
 assert.ok(databaseUrl, "DATABASE_URL is required for concurrency tests.")
@@ -11,16 +14,27 @@ const scopedDatabaseUrl = new URL(databaseUrl)
 scopedDatabaseUrl.searchParams.set("application_name", applicationName)
 process.env.DATABASE_URL = scopedDatabaseUrl.toString()
 
-const { db, getPool } = await import("../lib/prisma")
-const {
-  createChairConfiguration,
-  OperationalConfigError,
-  updateStaffMember,
-} = await import("../lib/operational-config")
-
+let prismaRuntime: PrismaRuntime | null = null
+let operationalRuntime: OperationalRuntime | null = null
 const createdShopIds: string[] = []
 
+const requirePrismaRuntime = () => {
+  assert.ok(prismaRuntime)
+  return prismaRuntime
+}
+
+const requireOperationalRuntime = () => {
+  assert.ok(operationalRuntime)
+  return operationalRuntime
+}
+
+before(async () => {
+  prismaRuntime = await import("../lib/prisma")
+  operationalRuntime = await import("../lib/operational-config")
+})
+
 const createShopWithStaff = async (tag: string) => {
+  const { db } = requirePrismaRuntime()
   const suffix = randomUUID().replace(/-/g, "").slice(0, 10)
   const shop = await db.barbershop.create({
     data: {
@@ -44,6 +58,8 @@ const expectOperationalCode = async (
   promise: Promise<unknown>,
   code: "INVALID_ASSIGNMENT" | "INVALID_LIFECYCLE",
 ) => {
+  const { OperationalConfigError } = requireOperationalRuntime()
+
   await assert.rejects(promise, (error: unknown) => {
     assert.ok(error instanceof OperationalConfigError)
     assert.equal(error.code, code)
@@ -82,6 +98,8 @@ const waitForBlockedQuery = async (
 }
 
 after(async () => {
+  const { db, getPool } = requirePrismaRuntime()
+
   if (createdShopIds.length > 0) {
     await db.chair.deleteMany({
       where: { barbershopId: { in: createdShopIds } },
@@ -99,6 +117,8 @@ after(async () => {
 })
 
 test("deactivate first serial order rejects a later new STAFF_BOOKING assignment", async () => {
+  const { getPool, db } = requirePrismaRuntime()
+  const { createChairConfiguration } = requireOperationalRuntime()
   const { shop, staff } = await createShopWithStaff("deactivate-first")
   const lifecycleWriter = await getPool().connect()
   const observer = await getPool().connect()
@@ -153,6 +173,9 @@ test("deactivate first serial order rejects a later new STAFF_BOOKING assignment
 })
 
 test("assignment first serial order permits later deactivation and preserves the Chair link", async () => {
+  const { getPool, db } = requirePrismaRuntime()
+  const { createChairConfiguration, updateStaffMember } =
+    requireOperationalRuntime()
   const { shop, staff } = await createShopWithStaff("assignment-first")
   const chairTableBlocker = await getPool().connect()
   const observer = await getPool().connect()
@@ -210,6 +233,8 @@ test("assignment first serial order permits later deactivation and preserves the
 })
 
 test("stale lifecycle writer cannot reactivate or unarchive an already committed archive", async () => {
+  const { getPool, db } = requirePrismaRuntime()
+  const { updateStaffMember } = requireOperationalRuntime()
   const { shop, staff } = await createShopWithStaff("stale-lifecycle")
   const archiver = await getPool().connect()
   const observer = await getPool().connect()
@@ -275,6 +300,9 @@ test("stale lifecycle writer cannot reactivate or unarchive an already committed
 })
 
 test("existing STAFF_BOOKING assignment remains linked after normal staff deactivation", async () => {
+  const { db } = requirePrismaRuntime()
+  const { createChairConfiguration, updateStaffMember } =
+    requireOperationalRuntime()
   const { shop, staff } = await createShopWithStaff("existing-preservation")
 
   const chair = await createChairConfiguration(shop.id, {

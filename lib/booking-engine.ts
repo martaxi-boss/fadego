@@ -17,6 +17,7 @@ export type BookingEngineErrorCode =
   | "NO_CAPACITY"
   | "BOOKING_UNAVAILABLE"
   | "INVALID_STATUS"
+  | "PAST_START"
 
 export class BookingEngineError extends Error {
   constructor(public readonly code: BookingEngineErrorCode) {
@@ -31,6 +32,14 @@ export type CreateBookingInput = {
   serviceId: string
   startsAt: Date
   requestedStaffMemberId?: string | null
+}
+
+export type BookingClock = {
+  now: () => Date
+}
+
+const systemBookingClock: BookingClock = {
+  now: () => new Date(),
 }
 
 type LockedChair = {
@@ -92,6 +101,13 @@ const assertGridStart = (startsAt: Date) => {
     startsAt.getTime() % (15 * 60 * 1000) !== 0
   ) {
     fail("INVALID_GRID")
+  }
+}
+
+const assertFutureStart = (startsAt: Date, clock: BookingClock) => {
+  const now = clock.now()
+  if (!isValidDate(now) || startsAt.getTime() <= now.getTime()) {
+    fail("PAST_START")
   }
 }
 
@@ -551,6 +567,7 @@ const runCapacityMutation = async <T>(
 
 export const createBooking = async (
   input: CreateBookingInput,
+  clock: BookingClock = systemBookingClock,
 ): Promise<Booking> =>
   runCapacityMutation(async (tx) => {
     await acquireTenantBookingLock(tx, input.barbershopId)
@@ -565,6 +582,7 @@ export const createBooking = async (
 
     const startsAt = new Date(input.startsAt)
     assertGridStart(startsAt)
+    assertFutureStart(startsAt, clock)
 
     const endsAt = new Date(
       startsAt.getTime() + service.durationMinutes * 60 * 1000,
@@ -682,6 +700,7 @@ export const rescheduleBooking = async (
   barbershopId: string,
   bookingId: string,
   startsAtInput: Date,
+  clock: BookingClock = systemBookingClock,
 ) =>
   runCapacityMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
@@ -694,6 +713,7 @@ export const rescheduleBooking = async (
     const tenant = await lockBarbershop(tx, barbershopId)
     const startsAt = new Date(startsAtInput)
     assertGridStart(startsAt)
+    assertFutureStart(startsAt, clock)
     const endsAt = new Date(
       startsAt.getTime() + current.serviceDurationMinutes * 60 * 1000,
     )

@@ -40,7 +40,10 @@ const redirectNotice = (
   slug: string,
   section: Section,
   notice: Notice,
-): never => redirect(`${sectionPath(slug, section)}?notice=${notice}`)
+): never => {
+  redirect(`${sectionPath(slug, section)}?notice=${notice}`)
+  throw new Error("Redirect did not terminate the request.")
+}
 
 const formText = (formData: FormData, key: string) =>
   String(formData.get(key) ?? "")
@@ -81,24 +84,24 @@ const handleWriteFailure = (
 ): never => {
   if (error instanceof OperationalConfigError) {
     if (error.code === "INVALID_ASSIGNMENT") {
-      redirectNotice(slug, section, "assignment")
+      return redirectNotice(slug, section, "assignment")
     }
 
     if (error.code === "NOT_FOUND") {
-      redirectNotice(slug, section, "not-found")
+      return redirectNotice(slug, section, "not-found")
     }
 
-    redirectNotice(slug, section, "invalid")
+    return redirectNotice(slug, section, "invalid")
   }
 
   console.error(`[operational-config] ${operation} failed`)
-  redirectNotice(slug, section, "write-failed")
+  return redirectNotice(slug, section, "write-failed")
 }
 
 const finishWrite = (slug: string, section: Section): never => {
   revalidatePath(sectionPath(slug, section))
   revalidatePath(`/admin/${slug}`)
-  redirectNotice(slug, section, "saved")
+  return redirectNotice(slug, section, "saved")
 }
 
 export async function createStaffMemberAction(
@@ -113,7 +116,7 @@ export async function createStaffMemberAction(
   })
 
   if (!input.success) {
-    redirectNotice(access.barbershop.slug, "professionals", "invalid")
+    return redirectNotice(access.barbershop.slug, "professionals", "invalid")
   }
 
   try {
@@ -144,8 +147,12 @@ export async function updateStaffMemberAction(
     archived: formText(formData, "archived"),
   })
 
-  if (!id.success || !input.success) {
-    redirectNotice(access.barbershop.slug, "professionals", "invalid")
+  if (!id.success) {
+    return redirectNotice(access.barbershop.slug, "professionals", "invalid")
+  }
+
+  if (!input.success) {
+    return redirectNotice(access.barbershop.slug, "professionals", "invalid")
   }
 
   try {
@@ -176,7 +183,7 @@ export async function createChairAction(
   })
 
   if (!input.success) {
-    redirectNotice(access.barbershop.slug, "chairs", "invalid")
+    return redirectNotice(access.barbershop.slug, "chairs", "invalid")
   }
 
   try {
@@ -208,8 +215,12 @@ export async function updateChairAction(
     active: formText(formData, "active"),
   })
 
-  if (!id.success || !input.success) {
-    redirectNotice(access.barbershop.slug, "chairs", "invalid")
+  if (!id.success) {
+    return redirectNotice(access.barbershop.slug, "chairs", "invalid")
+  }
+
+  if (!input.success) {
+    return redirectNotice(access.barbershop.slug, "chairs", "invalid")
   }
 
   try {
@@ -240,7 +251,7 @@ export async function createServiceAction(
   })
 
   if (!input.success) {
-    redirectNotice(access.barbershop.slug, "services", "invalid")
+    return redirectNotice(access.barbershop.slug, "services", "invalid")
   }
 
   try {
@@ -272,8 +283,12 @@ export async function updateServiceAction(
     active: formText(formData, "active"),
   })
 
-  if (!id.success || !input.success) {
-    redirectNotice(access.barbershop.slug, "services", "invalid")
+  if (!id.success) {
+    return redirectNotice(access.barbershop.slug, "services", "invalid")
+  }
+
+  if (!input.success) {
+    return redirectNotice(access.barbershop.slug, "services", "invalid")
   }
 
   try {
@@ -296,10 +311,14 @@ export async function saveOpeningHourAction(
   formData: FormData,
 ) {
   const access = await requireWriteAccess(rawSlug, "hours")
-  const id =
-    openingHourId.length === 0
-      ? null
-      : resourceIdSchema.safeParse(openingHourId)
+  let id: string | null = null
+  if (openingHourId.length > 0) {
+    const parsedId = resourceIdSchema.safeParse(openingHourId)
+    if (!parsedId.success) {
+      return redirectNotice(access.barbershop.slug, "hours", "invalid")
+    }
+    id = parsedId.data
+  }
 
   const input = openingHourInputSchema.safeParse({
     weekday: formText(formData, "weekday"),
@@ -308,14 +327,14 @@ export async function saveOpeningHourAction(
     closesAt: formText(formData, "closesAt"),
   })
 
-  if ((id !== null && !id.success) || !input.success) {
-    redirectNotice(access.barbershop.slug, "hours", "invalid")
+  if (!input.success) {
+    return redirectNotice(access.barbershop.slug, "hours", "invalid")
   }
 
   try {
     await saveOpeningHourConfiguration(
       access.barbershop.id,
-      id === null ? null : id.data,
+      id,
       input.data,
     )
   } catch (error) {

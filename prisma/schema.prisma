@@ -43,6 +43,13 @@ enum BookingMode {
   STAFF_BOOKING
 }
 
+enum MembershipStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
 model User {
   id           String             @id @default(uuid())
   name         String?
@@ -77,6 +84,9 @@ model Barbershop {
   bookingAccessTokens    BookingAccessToken[]
   membershipPlans        MembershipPlan[]
   membershipPlanServices MembershipPlanService[]
+  memberships            Membership[]
+  membershipEntitlements MembershipEntitlement[]
+  membershipUsages       MembershipUsage[]
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
 }
@@ -155,6 +165,7 @@ model Service {
   barbershop             Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
   bookings               Booking[]               @relation("BookingService")
   membershipPlanServices MembershipPlanService[]
+  membershipEntitlements MembershipEntitlement[]
 
   @@unique([id, barbershopId])
   @@index([barbershopId, active])
@@ -186,8 +197,9 @@ model Customer {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  bookings   Booking[]
+  barbershop  Barbershop   @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  bookings    Booking[]
+  memberships Membership[]
 
   @@unique([id, barbershopId])
   @@index([barbershopId, phone])
@@ -258,8 +270,9 @@ model MembershipPlan {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  barbershop Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  services   MembershipPlanService[]
+  barbershop  Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  services    MembershipPlanService[]
+  memberships Membership[]
 
   @@unique([id, barbershopId])
   @@index([barbershopId, active, archivedAt])
@@ -282,6 +295,75 @@ model MembershipPlanService {
   @@unique([barbershopId, membershipPlanId, serviceId])
   @@index([barbershopId, serviceId])
   @@index([barbershopId, membershipPlanId])
+}
+
+model Membership {
+  id                   String           @id @default(uuid())
+  barbershopId         String
+  customerId           String
+  membershipPlanId     String
+  status               MembershipStatus @default(ACTIVE)
+  startedAt            DateTime         @db.Timestamptz(3)
+  currentCycleStartsAt DateTime         @db.Timestamptz(3)
+  currentCycleEndsAt   DateTime         @db.Timestamptz(3)
+  cancelledAt          DateTime?        @db.Timestamptz(3)
+  expiredAt            DateTime?        @db.Timestamptz(3)
+  planNameSnapshot     String
+  planPriceSnapshot    Decimal          @db.Decimal(10, 2)
+  planBenefitsSnapshot String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  barbershop   Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  customer     Customer                @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  plan         MembershipPlan          @relation(fields: [membershipPlanId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  entitlements MembershipEntitlement[]
+  usages       MembershipUsage[]
+
+  @@unique([id, barbershopId])
+  @@index([barbershopId, customerId, status])
+  @@index([barbershopId, membershipPlanId, status])
+  @@index([barbershopId, status, currentCycleEndsAt])
+}
+
+model MembershipEntitlement {
+  id                  String   @id @default(uuid())
+  barbershopId        String
+  membershipId        String
+  serviceId           String
+  serviceNameSnapshot String
+  usageLimitPerCycle  Int?
+  createdAt           DateTime @default(now())
+
+  barbershop Barbershop        @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  membership Membership        @relation(fields: [membershipId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  service    Service           @relation(fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  usages     MembershipUsage[]
+
+  @@unique([id, membershipId, barbershopId])
+  @@unique([barbershopId, membershipId, serviceId])
+  @@index([barbershopId, serviceId])
+  @@index([barbershopId, membershipId])
+}
+
+model MembershipUsage {
+  id                      String   @id @default(uuid())
+  barbershopId            String
+  membershipId            String
+  membershipEntitlementId String
+  usedAt                  DateTime @db.Timestamptz(3)
+  cycleStartsAtSnapshot   DateTime @db.Timestamptz(3)
+  cycleEndsAtSnapshot     DateTime @db.Timestamptz(3)
+  createdAt               DateTime @default(now())
+
+  barbershop  Barbershop            @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  membership  Membership            @relation(fields: [membershipId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  entitlement MembershipEntitlement @relation(fields: [membershipEntitlementId, membershipId, barbershopId], references: [id, membershipId, barbershopId], onDelete: Restrict)
+
+  @@unique([id, barbershopId])
+  @@index([barbershopId, membershipId, cycleStartsAtSnapshot, cycleEndsAtSnapshot])
+  @@index([barbershopId, membershipEntitlementId, cycleStartsAtSnapshot])
+  @@index([barbershopId, usedAt])
 }
 
 model RateLimit {

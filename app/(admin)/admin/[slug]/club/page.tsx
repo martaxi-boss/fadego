@@ -1,4 +1,5 @@
 import ConfigNotice from "@/app/_components/config-notice"
+import ClubMembershipSection from "./membership-section"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { getMembershipPlans } from "@/lib/club-plans"
 import { db } from "@/lib/prisma"
@@ -193,6 +194,12 @@ export default async function ClubPlansPage({
           criá-los, editá-los ou arquivá-los.
         </p>
       )}
+
+      <ClubMembershipSection
+        barbershopId={access.barbershop.id}
+        role={access.membership.role}
+        slug={access.barbershop.slug}
+      />
 
       <section className="space-y-4">
         {plans.map((plan) => {

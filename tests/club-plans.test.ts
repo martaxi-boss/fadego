@@ -758,14 +758,17 @@ test("normal Club domain exposes no MembershipPlan hard-delete path", () => {
   assert.match(source, /active: false/)
 })
 
-test("005A does not add customer Membership MembershipUsage or payment implementation", () => {
+test("005A plan domain remains independent from membership lifecycle and payments", () => {
   const schema = readFileSync("prisma/schema.prisma", "utf8")
-  assert.equal(/model Membership\s*\{/.test(schema), false)
-  assert.equal(/model MembershipUsage\s*\{/.test(schema), false)
-  assert.equal(/model Payment\s*\{/.test(schema), false)
-  assert.equal(/model PlatformSubscription\s*\{/.test(schema), false)
+  const source = readFileSync("lib/club-plans.ts", "utf8")
+
   assert.match(schema, /model MembershipPlan\s*\{/)
   assert.match(schema, /model MembershipPlanService\s*\{/)
+  assert.equal(/model Payment\s*\{/.test(schema), false)
+  assert.equal(/model PlatformSubscription\s*\{/.test(schema), false)
+  assert.equal(source.includes("MembershipUsage"), false)
+  assert.equal(source.includes("enroll"), false)
+  assert.equal(source.toLowerCase().includes("payment"), false)
 })
 
 test("Club plan list remains tenant-scoped", async () => {

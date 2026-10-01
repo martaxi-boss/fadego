@@ -299,10 +299,10 @@ model MembershipPlanService {
 
 model Membership {
   id                   String           @id @default(uuid())
-  barbershopId           String
-  customerId             String
-  membershipPlanId       String
-  status                 MembershipStatus @default(ACTIVE)
+  barbershopId         String
+  customerId           String
+  membershipPlanId     String
+  status               MembershipStatus @default(ACTIVE)
   startedAt            DateTime         @db.Timestamptz(3)
   currentCycleStartsAt DateTime         @db.Timestamptz(3)
   currentCycleEndsAt   DateTime         @db.Timestamptz(3)
@@ -314,9 +314,9 @@ model Membership {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
-  barbershop  Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  customer    Customer                @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  plan        MembershipPlan          @relation(fields: [membershipPlanId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  barbershop   Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  customer     Customer                @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  plan         MembershipPlan          @relation(fields: [membershipPlanId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
   entitlements MembershipEntitlement[]
   usages       MembershipUsage[]
 
@@ -328,16 +328,16 @@ model Membership {
 
 model MembershipEntitlement {
   id                  String   @id @default(uuid())
-  barbershopId           String
-  membershipId           String
-  serviceId              String
-  serviceNameSnapshot    String
+  barbershopId        String
+  membershipId        String
+  serviceId           String
+  serviceNameSnapshot String
   usageLimitPerCycle  Int?
   createdAt           DateTime @default(now())
 
-  barbershop Barbershop       @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  membership Membership       @relation(fields: [membershipId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  service    Service          @relation(fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  barbershop Barbershop        @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  membership Membership        @relation(fields: [membershipId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  service    Service           @relation(fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
   usages     MembershipUsage[]
 
   @@unique([id, membershipId, barbershopId])

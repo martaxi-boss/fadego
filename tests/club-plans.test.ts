@@ -758,15 +758,15 @@ test("normal Club domain exposes no MembershipPlan hard-delete path", () => {
   assert.match(source, /active: false/)
 })
 
-test("005A plan domain remains independent from membership lifecycle and payments", () => {
+test("005A plan domain remains independent from membership lifecycle and billing", () => {
   const schema = readFileSync("prisma/schema.prisma", "utf8")
   const source = readFileSync("lib/club-plans.ts", "utf8")
 
   assert.match(schema, /model MembershipPlan\s*\{/)
   assert.match(schema, /model MembershipPlanService\s*\{/)
-  assert.equal(/model Payment\s*\{/.test(schema), false)
-  assert.equal(/model PlatformSubscription\s*\{/.test(schema), false)
   assert.equal(source.includes("MembershipUsage"), false)
+  assert.equal(source.includes("Payment"), false)
+  assert.equal(source.includes("PlatformSubscription"), false)
   assert.equal(source.includes("enroll"), false)
   assert.equal(source.toLowerCase().includes("payment"), false)
 })

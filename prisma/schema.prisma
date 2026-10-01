@@ -50,6 +50,19 @@ enum MembershipStatus {
   EXPIRED
 }
 
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum PlatformSubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+}
+
 model User {
   id           String             @id @default(uuid())
   name         String?
@@ -87,6 +100,8 @@ model Barbershop {
   memberships            Membership[]
   membershipEntitlements MembershipEntitlement[]
   membershipUsages       MembershipUsage[]
+  payments               Payment[]
+  platformSubscription   PlatformSubscription?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
 }
@@ -319,6 +334,7 @@ model Membership {
   plan         MembershipPlan          @relation(fields: [membershipPlanId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
   entitlements MembershipEntitlement[]
   usages       MembershipUsage[]
+  payments     Payment[]
 
   @@unique([id, barbershopId])
   @@index([barbershopId, customerId, status])
@@ -364,6 +380,53 @@ model MembershipUsage {
   @@index([barbershopId, membershipId, cycleStartsAtSnapshot, cycleEndsAtSnapshot])
   @@index([barbershopId, membershipEntitlementId, cycleStartsAtSnapshot])
   @@index([barbershopId, usedAt])
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  barbershopId          String
+  membershipId          String
+  status                PaymentStatus @default(PENDING)
+  amount                Decimal       @db.Decimal(10, 2)
+  currency              String        @db.VarChar(3)
+  cycleStartsAtSnapshot DateTime      @db.Timestamptz(3)
+  cycleEndsAtSnapshot   DateTime      @db.Timestamptz(3)
+  providerKey           String?       @db.VarChar(64)
+  externalPaymentRef    String?       @db.VarChar(255)
+  paidAt                DateTime?     @db.Timestamptz(3)
+  failedAt              DateTime?     @db.Timestamptz(3)
+  refundedAt            DateTime?     @db.Timestamptz(3)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  membership Membership @relation(fields: [membershipId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@unique([id, barbershopId])
+  @@unique([providerKey, externalPaymentRef])
+  @@index([barbershopId, membershipId, createdAt])
+  @@index([barbershopId, status, createdAt])
+}
+
+model PlatformSubscription {
+  id                      String                     @id @default(uuid())
+  barbershopId            String                     @unique
+  status                  PlatformSubscriptionStatus @default(ACTIVE)
+  planKey                 String                     @db.VarChar(64)
+  priceSnapshot           Decimal                    @db.Decimal(10, 2)
+  currency                String                     @db.VarChar(3)
+  currentPeriodStartsAt   DateTime                   @db.Timestamptz(3)
+  currentPeriodEndsAt     DateTime                   @db.Timestamptz(3)
+  providerKey             String?                    @db.VarChar(64)
+  externalCustomerRef     String?                    @db.VarChar(255)
+  externalSubscriptionRef String?                    @db.VarChar(255)
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+
+  @@unique([providerKey, externalSubscriptionRef])
+  @@index([status, currentPeriodEndsAt])
 }
 
 model RateLimit {

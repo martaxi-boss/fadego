@@ -5,6 +5,12 @@ const messages: Record<string, string> = {
     "Só é possível fazer uma nova atribuição a um profissional ativo e não arquivado da mesma barbearia.",
   "club-assignment":
     "Só é possível adicionar ao plano um Serviço ativo da mesma barbearia.",
+  "club-plan-unavailable":
+    "O plano selecionado já não aceita novas adesões.",
+  "club-usage-unavailable":
+    "Esta ação Club já não está disponível para o estado ou ciclo atual.",
+  "club-limit":
+    "O limite incluído deste Serviço já foi atingido no ciclo atual.",
   "not-found": "O recurso já não está disponível neste tenant.",
   "rate-limit":
     "Foram feitas demasiadas alterações num curto período. Tenta novamente dentro de instantes.",

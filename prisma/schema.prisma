@@ -75,6 +75,8 @@ model Barbershop {
   customers           Customer[]
   bookings            Booking[]
   bookingAccessTokens BookingAccessToken[]
+  membershipPlans     MembershipPlan[]
+  membershipPlanServices MembershipPlanService[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
@@ -151,7 +153,8 @@ model Service {
   updatedAt       DateTime @updatedAt
 
   barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  bookings   Booking[]  @relation("BookingService")
+  bookings               Booking[]               @relation("BookingService")
+  membershipPlanServices MembershipPlanService[]
 
   @@unique([id, barbershopId])
   @@index([barbershopId, active])
@@ -241,6 +244,44 @@ model BookingAccessToken {
   @@unique([id, barbershopId])
   @@index([barbershopId, bookingId])
   @@index([revokedAt])
+}
+
+model MembershipPlan {
+  id           String    @id @default(uuid())
+  barbershopId String
+  name         String
+  description  String?
+  price        Decimal   @db.Decimal(10, 2)
+  benefits     String?
+  active       Boolean   @default(true)
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  barbershop Barbershop             @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  services   MembershipPlanService[]
+
+  @@unique([id, barbershopId])
+  @@index([barbershopId, active, archivedAt])
+}
+
+model MembershipPlanService {
+  id                 String   @id @default(uuid())
+  barbershopId       String
+  membershipPlanId   String
+  serviceId          String
+  usageLimitPerCycle Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  barbershop     Barbershop     @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  membershipPlan MembershipPlan @relation(fields: [membershipPlanId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  service        Service        @relation(fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@unique([id, barbershopId])
+  @@unique([barbershopId, membershipPlanId, serviceId])
+  @@index([barbershopId, serviceId])
+  @@index([barbershopId, membershipPlanId])
 }
 
 model RateLimit {

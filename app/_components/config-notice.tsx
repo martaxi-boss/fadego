@@ -3,6 +3,8 @@ const messages: Record<string, string> = {
   invalid: "Verifica os dados introduzidos e tenta novamente.",
   assignment:
     "Só é possível fazer uma nova atribuição a um profissional ativo e não arquivado da mesma barbearia.",
+  "club-assignment":
+    "Só é possível adicionar ao plano um Serviço ativo da mesma barbearia.",
   "not-found": "O recurso já não está disponível neste tenant.",
   "rate-limit":
     "Foram feitas demasiadas alterações num curto período. Tenta novamente dentro de instantes.",

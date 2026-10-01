@@ -16,7 +16,7 @@ import { consumeRateLimit, hashRateLimitKey } from "@/lib/rate-limit"
 type Notice =
   | "saved"
   | "invalid"
-  | "assignment"
+  | "club-assignment"
   | "not-found"
   | "rate-limit"
   | "write-failed"
@@ -90,7 +90,7 @@ const handleFailure = (
 ): never => {
   if (error instanceof ClubPlanError) {
     if (error.code === "INVALID_ASSIGNMENT") {
-      return redirectNotice(slug, "assignment")
+      return redirectNotice(slug, "club-assignment")
     }
 
     if (error.code === "NOT_FOUND") {

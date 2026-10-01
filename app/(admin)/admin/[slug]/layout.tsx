@@ -36,6 +36,7 @@ export default async function TenantAdminLayout({
         { href: `${homeHref}/chairs`, label: "Cadeiras" },
         { href: `${homeHref}/services`, label: "Serviços" },
         { href: `${homeHref}/hours`, label: "Horários" },
+        { href: `${homeHref}/club`, label: "Club" },
       ]}
       scopeLabel={`${barbershop.slug}.fadego.pt · ${membership.role}`}
     >

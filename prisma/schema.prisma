@@ -57,26 +57,28 @@ model User {
 }
 
 model Barbershop {
-  id                  String               @id @default(uuid())
-  name                String
-  slug                String               @unique @db.VarChar(63)
-  logoUrl             String?
-  address             String?
-  phone               String?
-  instagram           String?
-  officialWebsite     String?
-  timezone            String?              @db.VarChar(255)
-  status              BarbershopStatus     @default(ACTIVE)
-  members             BarbershopMember[]
-  staffMembers        StaffMember[]
-  chairs              Chair[]
-  services            Service[]
-  openingHours        OpeningHour[]
-  customers           Customer[]
-  bookings            Booking[]
-  bookingAccessTokens BookingAccessToken[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  id                     String                  @id @default(uuid())
+  name                   String
+  slug                   String                  @unique @db.VarChar(63)
+  logoUrl                String?
+  address                String?
+  phone                  String?
+  instagram              String?
+  officialWebsite        String?
+  timezone               String?                 @db.VarChar(255)
+  status                 BarbershopStatus        @default(ACTIVE)
+  members                BarbershopMember[]
+  staffMembers           StaffMember[]
+  chairs                 Chair[]
+  services               Service[]
+  openingHours           OpeningHour[]
+  customers              Customer[]
+  bookings               Booking[]
+  bookingAccessTokens    BookingAccessToken[]
+  membershipPlans        MembershipPlan[]
+  membershipPlanServices MembershipPlanService[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 }
 
 model BarbershopMember {
@@ -150,8 +152,9 @@ model Service {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  bookings   Booking[]  @relation("BookingService")
+  barbershop             Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  bookings               Booking[]               @relation("BookingService")
+  membershipPlanServices MembershipPlanService[]
 
   @@unique([id, barbershopId])
   @@index([barbershopId, active])
@@ -241,6 +244,44 @@ model BookingAccessToken {
   @@unique([id, barbershopId])
   @@index([barbershopId, bookingId])
   @@index([revokedAt])
+}
+
+model MembershipPlan {
+  id           String    @id @default(uuid())
+  barbershopId String
+  name         String
+  description  String?
+  price        Decimal   @db.Decimal(10, 2)
+  benefits     String?
+  active       Boolean   @default(true)
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  barbershop Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  services   MembershipPlanService[]
+
+  @@unique([id, barbershopId])
+  @@index([barbershopId, active, archivedAt])
+}
+
+model MembershipPlanService {
+  id                 String   @id @default(uuid())
+  barbershopId       String
+  membershipPlanId   String
+  serviceId          String
+  usageLimitPerCycle Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  barbershop     Barbershop     @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  membershipPlan MembershipPlan @relation(fields: [membershipPlanId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  service        Service        @relation(fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@unique([id, barbershopId])
+  @@unique([barbershopId, membershipPlanId, serviceId])
+  @@index([barbershopId, serviceId])
+  @@index([barbershopId, membershipPlanId])
 }
 
 model RateLimit {

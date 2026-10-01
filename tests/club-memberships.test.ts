@@ -1382,7 +1382,7 @@ test("normal Membership domain exposes no hard-delete or usage reset path", () =
   assert.match(source, /membershipUsage\.create\(/)
 })
 
-test("005B adds no customer User payment automatic renewal or Booking integration", () => {
+test("005B membership domain remains independent from billing providers renewal and Booking integration", () => {
   const schema = readFileSync("prisma/schema.prisma", "utf8")
   const domain = readFileSync("lib/club-memberships.ts", "utf8")
   const booking = readFileSync("lib/booking-engine.ts", "utf8")
@@ -1391,9 +1391,9 @@ test("005B adds no customer User payment automatic renewal or Booking integratio
   assert.match(schema, /model Membership\s*\{/)
   assert.match(schema, /model MembershipEntitlement\s*\{/)
   assert.match(schema, /model MembershipUsage\s*\{/)
-  assert.equal(/model Payment\s*\{/.test(schema), false)
-  assert.equal(/model PlatformSubscription\s*\{/.test(schema), false)
   assert.equal(domain.includes("user.create"), false)
+  assert.equal(domain.includes("Payment"), false)
+  assert.equal(domain.includes("PlatformSubscription"), false)
   assert.equal(domain.includes("stripe"), false)
   assert.equal(domain.includes("setInterval"), false)
   assert.equal(domain.includes("Booking"), false)

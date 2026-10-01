@@ -57,28 +57,28 @@ model User {
 }
 
 model Barbershop {
-  id                  String               @id @default(uuid())
-  name                String
-  slug                String               @unique @db.VarChar(63)
-  logoUrl             String?
-  address             String?
-  phone               String?
-  instagram           String?
-  officialWebsite     String?
-  timezone            String?              @db.VarChar(255)
-  status              BarbershopStatus     @default(ACTIVE)
-  members             BarbershopMember[]
-  staffMembers        StaffMember[]
-  chairs              Chair[]
-  services            Service[]
-  openingHours        OpeningHour[]
-  customers           Customer[]
-  bookings            Booking[]
-  bookingAccessTokens BookingAccessToken[]
-  membershipPlans     MembershipPlan[]
+  id                     String                  @id @default(uuid())
+  name                   String
+  slug                   String                  @unique @db.VarChar(63)
+  logoUrl                String?
+  address                String?
+  phone                  String?
+  instagram              String?
+  officialWebsite        String?
+  timezone               String?                 @db.VarChar(255)
+  status                 BarbershopStatus        @default(ACTIVE)
+  members                BarbershopMember[]
+  staffMembers           StaffMember[]
+  chairs                 Chair[]
+  services               Service[]
+  openingHours           OpeningHour[]
+  customers              Customer[]
+  bookings               Booking[]
+  bookingAccessTokens    BookingAccessToken[]
+  membershipPlans        MembershipPlan[]
   membershipPlanServices MembershipPlanService[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 }
 
 model BarbershopMember {
@@ -152,7 +152,7 @@ model Service {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  barbershop             Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
   bookings               Booking[]               @relation("BookingService")
   membershipPlanServices MembershipPlanService[]
 
@@ -258,7 +258,7 @@ model MembershipPlan {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  barbershop Barbershop             @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  barbershop Barbershop              @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
   services   MembershipPlanService[]
 
   @@unique([id, barbershopId])

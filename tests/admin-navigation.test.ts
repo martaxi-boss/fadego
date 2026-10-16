@@ -16,6 +16,7 @@ test("staff navigation never exposes manager-only customer directory", () => {
   const staffModules = tenantModulesForRole("STAFF")
   assert.equal(staffModules.some((module) => module.href === "customers"), false)
   assert.equal(staffModules.some((module) => module.href === "agenda"), true)
+  assert.equal(staffModules.some((module) => module.href === "club"), true)
   for (const role of ["OWNER", "ADMIN"] as const) {
     assert.equal(tenantModulesForRole(role).some((module) => module.href === "customers"), true)
   }

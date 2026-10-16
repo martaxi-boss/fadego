@@ -1,5 +1,6 @@
 import { createPublicBooking } from "@/lib/public-booking"
 import { sourceIpFromHeaders } from "@/lib/request-context"
+import { asJsonObject, readBoundedJsonObject } from "@/lib/http-json"
 
 const noStoreHeaders = {
   "Cache-Control": "no-store, max-age=0",
@@ -10,7 +11,15 @@ export async function POST(
   context: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await context.params
-  const body = await request.json().catch(() => ({}))
+  const parsedBody = await readBoundedJsonObject(request)
+  if (!parsedBody.ok) {
+    return Response.json({ ok: false, code: "INVALID_INPUT" }, {
+      status: parsedBody.status,
+      headers: noStoreHeaders,
+    })
+  }
+  const body = parsedBody.value
+  const customer = asJsonObject(body.customer)
   const result = await createPublicBooking(
     {
       barbershopSlug: slug,
@@ -24,16 +33,16 @@ export async function POST(
         typeof body.startsAt === "string" ? body.startsAt : "",
       customer: {
         name:
-          typeof body.customer?.name === "string"
-            ? body.customer.name
+          typeof customer.name === "string"
+            ? customer.name
             : "",
         phone:
-          typeof body.customer?.phone === "string"
-            ? body.customer.phone
+          typeof customer.phone === "string"
+            ? customer.phone
             : "",
         email:
-          typeof body.customer?.email === "string"
-            ? body.customer.email
+          typeof customer.email === "string"
+            ? customer.email
             : "",
       },
     },

@@ -211,7 +211,7 @@ export default async function AgendaPage({
                   <form action={reassignTenantBookingAction.bind(null, access.barbershop.slug, booking.id, date)}
                     className="flex flex-wrap items-center gap-2">
                     <label className="sr-only" htmlFor={"target-" + booking.id}>Novo atendimento</label>
-                    <select id={"target-" + booking.id} name="targetStaffMemberId" required
+                    <select id={"target-" + booking.id} name="targetStaffMemberId"
                       className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
                       {generalChairCount > 0 ? <option value="">Atendimento geral</option> : null}
                       {staff.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}

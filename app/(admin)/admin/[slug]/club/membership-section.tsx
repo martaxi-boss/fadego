@@ -1,6 +1,7 @@
 import type { TenantRole } from "@prisma/client"
 import { getMemberships } from "@/lib/club-memberships"
 import { resolveAgendaTimezone } from "@/lib/admin-agenda"
+import { resolveDirectoryPage } from "@/lib/admin-pagination"
 import { canViewCustomerContactDetails } from "@/lib/tenant-presentation"
 import { db } from "@/lib/prisma"
 import {
@@ -44,15 +45,17 @@ export default async function ClubMembershipSection({
   barbershopId,
   slug,
   role,
+  membershipPage,
 }: {
   barbershopId: string
   slug: string
   role: TenantRole
+  membershipPage?: string
 }) {
   const canManage = role === "OWNER" || role === "ADMIN"
   const canViewContacts = canViewCustomerContactDetails(role)
-  const [memberships, plans, customers, shop] = await Promise.all([
-    getMemberships(barbershopId),
+  const [membershipCount, plans, customers, shop] = await Promise.all([
+    db.membership.count({ where: { barbershopId } }),
     db.membershipPlan.findMany({
       where: {
         barbershopId,
@@ -81,6 +84,11 @@ export default async function ClubMembershipSection({
       select: { timezone: true },
     }),
   ])
+  const pagination = resolveDirectoryPage(membershipPage, membershipCount)
+  const memberships = await getMemberships(barbershopId, {
+    skip: pagination.skip,
+    take: pagination.take,
+  })
   const timezone = resolveAgendaTimezone(shop?.timezone ?? null)
   const format = formatter(timezone)
 
@@ -408,6 +416,36 @@ export default async function ClubMembershipSection({
           <p className="rounded-xl border border-dashed border-gray-300 p-5 text-sm text-gray-600">
             Ainda não existem adesões Club.
           </p>
+        ) : null}
+        {membershipCount > 0 ? (
+          <nav aria-label="Páginas de adesões Club"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 text-sm">
+            <p className="text-gray-600">
+              A mostrar {pagination.first}–{pagination.last} de {membershipCount} adesões
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {pagination.hasPrevious ? (
+                <a href={`/admin/${slug}/club?membershipPage=${pagination.page - 1}`}
+                  className="rounded-lg border border-gray-300 px-3 py-2 font-semibold hover:bg-gray-50">
+                  ← Anterior
+                </a>
+              ) : null}
+              <span aria-current="page" className="rounded-lg bg-slate-950 px-3 py-2 font-semibold text-white">
+                Página {pagination.page} de {pagination.totalPages}
+              </span>
+              {pagination.hasNext ? (
+                <a href={`/admin/${slug}/club?membershipPage=${pagination.page + 1}`}
+                  className="rounded-lg border border-gray-300 px-3 py-2 font-semibold hover:bg-gray-50">
+                  Seguinte →
+                </a>
+              ) : null}
+            </div>
+            {pagination.totalPages > pagination.lastPage ? (
+              <p className="w-full text-xs text-amber-800">
+                Refina os dados para encontrar adesões fora do limite de navegação.
+              </p>
+            ) : null}
+          </nav>
         ) : null}
       </div>
     </section>

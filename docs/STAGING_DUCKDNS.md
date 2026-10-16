@@ -12,10 +12,12 @@ outra aplicação** e **não publica nem modifica nada por si só**.
 ## Situação atual
 
 O código dos PRs #12–#14 foi consolidado no PR #15, com validação
-conjunta e capturas de ecrã de dados fictícios. O domínio
-`https://fadego.duckdns.org` **não foi confirmado como acessível** e a
-infraestrutura de VPS/DNS não pode ser dada como existente sem prova.
-O `AGENTS.md` exige autorização do Supervisor antes de merge/deploy.
+conjunta e capturas de ecrã de dados fictícios. O domínio DuckDNS foi
+confirmado pelo Owner como pertencente à VPS `146.59.145.3`. O acesso
+SSH à VPS foi comprovado, mas o HTTPS **ainda não responde** e o FADEGO
+**ainda não foi instalado**. Não interpretar a conectividade SSH como
+certificação da aplicação ou autorização de publicação. O `AGENTS.md`
+exige aprovação do Supervisor antes de merge/deploy.
 
 ## Topologia pretendida (somente testes)
 
@@ -42,7 +44,8 @@ O `AGENTS.md` exige autorização do Supervisor antes de merge/deploy.
    pelo Supervisor. Nenhum deploy é disparado por esta revisão.
 3. Criar e guardar credenciais **distintas para testes** no cofre já aprovado
    da VPS: password hex PostgreSQL, NEXTAUTH_SECRET aleatório e password
-   do portão de testes; o Caddy usa apenas o **hash bcrypt** da password.
+   do portão de testes; na VPS atual o Nginx usa o ficheiro 
+   **htpasswd protegido**, e no perfil dedicado o Caddy usa um hash.
    Nunca enviar tokens DuckDNS ou credenciais em issues, chats ou git.
 4. Reservar o hostname à aplicação de testes, configurar HTTPS válido,
    garantir acesso autenticado e ausência de dados reais.
@@ -70,7 +73,7 @@ correcto. Numa VPS partilhada, usar o proxy já instalado com Basic Auth
 equivalente e cabeçalhos de privacidade.
 
 Num banco staging vazio, o primeiro SUPER_ADMIN pode ser criado **uma única
-vez** pelo comando `pnpm bootstrap:admin` com credenciais do cofre; o
+vez** pelo comando `corepack pnpm bootstrap:admin` com credenciais do cofre; o
 bootstrap recusa atuar quando existem utilizadores. Não reutilizar a
 password de administração da produção. Dados de testes apenas sintéticos.
 

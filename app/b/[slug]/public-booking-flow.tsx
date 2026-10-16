@@ -1,7 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { type FormEvent, useState } from "react"
+import { type FormEvent, useRef, useState } from "react"
+import { AvailabilityRequestVersion } from "@/lib/availability-request-version"
 
 type ServiceOption = {
   id: string
@@ -95,8 +96,11 @@ export default function PublicBookingFlow({
   const [bookingPending, setBookingPending] = useState(false)
   const [successPendingRedirect, setSuccessPendingRedirect] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const availabilityRequests = useRef(new AvailabilityRequestVersion())
 
   const resetSlots = () => {
+    availabilityRequests.current.invalidate()
+    setAvailabilityPending(false)
     setSlots([])
     setSelectedStart("")
     setAvailabilityLoaded(false)
@@ -104,6 +108,7 @@ export default function PublicBookingFlow({
   }
 
   const loadAvailability = async () => {
+    const version = availabilityRequests.current.begin()
     setError(null)
     setSelectedStart("")
     setAvailabilityLoaded(false)
@@ -132,19 +137,25 @@ export default function PublicBookingFlow({
       )
 
       const payload = (await response.json()) as AvailabilityResponse
+      if (!availabilityRequests.current.isCurrent(version)) return false
       if (!payload.ok) {
         setSlots([])
         setError("Não foi possível consultar horários para esta seleção.")
-        return
+        return false
       }
 
       setSlots(payload.availability.slots)
       setAvailabilityLoaded(true)
+      return true
     } catch {
+      if (!availabilityRequests.current.isCurrent(version)) return false
       setSlots([])
       setError("Não foi possível consultar horários neste momento.")
+      return false
     } finally {
-      setAvailabilityPending(false)
+      if (availabilityRequests.current.isCurrent(version)) {
+        setAvailabilityPending(false)
+      }
     }
   }
 
@@ -185,10 +196,12 @@ export default function PublicBookingFlow({
 
       if (!payload.ok) {
         if (payload.code === "SLOT_UNAVAILABLE") {
-          await loadAvailability()
-          setError(
-            "Esse horário acabou de ficar indisponível. Escolhe outro horário.",
-          )
+          const refreshed = await loadAvailability()
+          if (refreshed) {
+            setError(
+              "Esse horário acabou de ficar indisponível. Escolhe outro horário.",
+            )
+          }
           return
         }
 
@@ -267,6 +280,7 @@ export default function PublicBookingFlow({
                       : "rounded-xl border border-gray-200 bg-white p-4 text-left hover:border-gray-500"
                   }
                   key={service.id}
+                  disabled={bookingPending || successPendingRedirect}
                   onClick={() => {
                     setServiceId(service.id)
                     resetSlots()
@@ -316,6 +330,7 @@ export default function PublicBookingFlow({
                     ? "rounded-xl border border-gray-950 bg-gray-950 p-4 text-left text-white"
                     : "rounded-xl border border-gray-200 bg-white p-4 text-left hover:border-gray-500"
                 }
+                disabled={bookingPending || successPendingRedirect}
                 onClick={() => {
                   setMethod(GENERAL_METHOD)
                   resetSlots()
@@ -346,6 +361,7 @@ export default function PublicBookingFlow({
                       : "flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left hover:border-gray-500"
                   }
                   key={professional.id}
+                  disabled={bookingPending || successPendingRedirect}
                   onClick={() => {
                     setMethod(professional.id)
                     resetSlots()
@@ -385,6 +401,7 @@ export default function PublicBookingFlow({
             className="w-full rounded-xl border border-gray-300 px-3 py-3 outline-none focus:border-gray-950"
             type="date"
             value={localDate}
+            disabled={bookingPending || successPendingRedirect}
             onChange={(event) => {
               setLocalDate(event.target.value)
               resetSlots()
@@ -395,7 +412,7 @@ export default function PublicBookingFlow({
 
         <button
           className="rounded-xl bg-gray-950 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={availabilityPending || !localDate}
+          disabled={availabilityPending || bookingPending || successPendingRedirect || !localDate}
           onClick={loadAvailability}
           type="button"
         >
@@ -416,6 +433,7 @@ export default function PublicBookingFlow({
                         : "rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm font-semibold hover:border-gray-950"
                     }
                     key={slot.startsAt}
+                    disabled={bookingPending || successPendingRedirect}
                     onClick={() => {
                       setSelectedStart(slot.startsAt)
                       setError(null)

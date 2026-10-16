@@ -1,5 +1,8 @@
 import type { TenantRole } from "@prisma/client"
 import { getMemberships } from "@/lib/club-memberships"
+import { resolveAgendaTimezone } from "@/lib/admin-agenda"
+import { resolveDirectoryPage } from "@/lib/admin-pagination"
+import { canViewCustomerContactDetails } from "@/lib/tenant-presentation"
 import { db } from "@/lib/prisma"
 import {
   enrollExistingCustomerAction,
@@ -42,14 +45,17 @@ export default async function ClubMembershipSection({
   barbershopId,
   slug,
   role,
+  membershipPage,
 }: {
   barbershopId: string
   slug: string
   role: TenantRole
+  membershipPage?: string
 }) {
   const canManage = role === "OWNER" || role === "ADMIN"
-  const [memberships, plans, customers, shop] = await Promise.all([
-    getMemberships(barbershopId),
+  const canViewContacts = canViewCustomerContactDetails(role)
+  const [membershipCount, plans, customers, shop] = await Promise.all([
+    db.membership.count({ where: { barbershopId } }),
     db.membershipPlan.findMany({
       where: {
         barbershopId,
@@ -63,7 +69,7 @@ export default async function ClubMembershipSection({
       },
       orderBy: [{ name: "asc" }, { id: "asc" }],
     }),
-    db.customer.findMany({
+    canManage ? db.customer.findMany({
       where: { barbershopId },
       select: {
         id: true,
@@ -72,13 +78,18 @@ export default async function ClubMembershipSection({
         email: true,
       },
       orderBy: [{ name: "asc" }, { id: "asc" }],
-    }),
+    }) : Promise.resolve([]),
     db.barbershop.findUnique({
       where: { id: barbershopId },
       select: { timezone: true },
     }),
   ])
-  const timezone = shop?.timezone || "UTC"
+  const pagination = resolveDirectoryPage(membershipPage, membershipCount)
+  const memberships = await getMemberships(barbershopId, {
+    skip: pagination.skip,
+    take: pagination.take,
+  })
+  const timezone = resolveAgendaTimezone(shop?.timezone ?? null)
   const format = formatter(timezone)
 
   return (
@@ -224,12 +235,14 @@ export default async function ClubMembershipSection({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold">{membership.customer.name}</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  {membership.customer.phone}
-                  {membership.customer.email
-                    ? ` · ${membership.customer.email}`
-                    : ""}
-                </p>
+                {canViewContacts ? (
+                  <p className="mt-1 text-sm text-gray-600">
+                    {membership.customer.phone}
+                    {membership.customer.email
+                      ? ` · ${membership.customer.email}`
+                      : ""}
+                  </p>
+                ) : null}
                 <p className="mt-2 text-sm font-medium">
                   {membership.planNameSnapshot} · €
                   {membership.planPriceSnapshot.toFixed(2)}
@@ -403,6 +416,36 @@ export default async function ClubMembershipSection({
           <p className="rounded-xl border border-dashed border-gray-300 p-5 text-sm text-gray-600">
             Ainda não existem adesões Club.
           </p>
+        ) : null}
+        {membershipCount > 0 ? (
+          <nav aria-label="Páginas de adesões Club"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4 text-sm">
+            <p className="text-gray-600">
+              A mostrar {pagination.first}–{pagination.last} de {membershipCount} adesões
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {pagination.hasPrevious ? (
+                <a href={`/admin/${slug}/club?membershipPage=${pagination.page - 1}`}
+                  className="rounded-lg border border-gray-300 px-3 py-2 font-semibold hover:bg-gray-50">
+                  ← Anterior
+                </a>
+              ) : null}
+              <span aria-current="page" className="rounded-lg bg-slate-950 px-3 py-2 font-semibold text-white">
+                Página {pagination.page} de {pagination.totalPages}
+              </span>
+              {pagination.hasNext ? (
+                <a href={`/admin/${slug}/club?membershipPage=${pagination.page + 1}`}
+                  className="rounded-lg border border-gray-300 px-3 py-2 font-semibold hover:bg-gray-50">
+                  Seguinte →
+                </a>
+              ) : null}
+            </div>
+            {pagination.totalPages > pagination.lastPage ? (
+              <p className="w-full text-xs text-amber-800">
+                Refina os dados para encontrar adesões fora do limite de navegação.
+              </p>
+            ) : null}
+          </nav>
         ) : null}
       </div>
     </section>

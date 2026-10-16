@@ -434,8 +434,12 @@ export const recordMembershipUsage = async (
   })
 }
 
-export const getMemberships = (barbershopId: string) =>
+export const getMemberships = (
+  barbershopId: string,
+  pagination?: { skip: number; take: number },
+) =>
   db.membership.findMany({
+    ...(pagination ? { skip: pagination.skip, take: pagination.take } : {}),
     where: {
       barbershopId,
     },

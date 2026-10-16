@@ -20,7 +20,7 @@ export default async function ClubPlansPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ notice?: string | string[] }>
+  searchParams: Promise<{ notice?: string | string[]; membershipPage?: string | string[] }>
 }) {
   const { slug } = await params
   const query = await searchParams
@@ -199,6 +199,7 @@ export default async function ClubPlansPage({
         barbershopId={access.barbershop.id}
         role={access.membership.role}
         slug={access.barbershop.slug}
+        membershipPage={firstNotice(query.membershipPage)}
       />
 
       <section className="space-y-4">

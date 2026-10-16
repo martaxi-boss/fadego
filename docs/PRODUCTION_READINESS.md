@@ -23,7 +23,8 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [ ] Operational notifications with opt-out and retry policies
 - [x] One-time guarded SUPER_ADMIN bootstrap tool for a fresh database
 - [ ] Password recovery and approved provisioning/recovery for existing installations
-- [ ] Controlled backups/restores, observability, incident runbook and RGPD
+- [x] Ephemeral CI Postgres backup/restore rehearsal with synthetic tenant/customer data
+- [ ] Production backups/restores, observability, incident runbook and RGPD
       retention/export/erasure design
 - [ ] Automated multi-tenant end-to-end browser testing and pilot acceptance
 

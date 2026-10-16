@@ -12,6 +12,7 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Tenant-scoped searchable customer directory
 - [x] Read-only super-admin metrics
 - [x] Anti-abuse hardening: explicit proxy trust, phone/source budgets
+- [x] Expiry enforcement for private access codes 30 days after appointment end
 - [x] CI includes all development branches and main on push
 - [x] Protected booking completion and no-show actions (only after appointment end)
 - [ ] Reassignments, advanced staff-restricted views and real barbershop workflow tests

@@ -8,6 +8,7 @@ import {
   canonicalizeAccessCode,
   generateAccessCode,
   hashAccessCode,
+  isBookingAccessExpired,
 } from "../lib/booking-access"
 import {
   cancelBookingByCustomer,
@@ -988,4 +989,25 @@ test("public application surfaces wire canonical availability to booking and kee
   )
   assert.equal(privatePage.includes("cancelBookingByCustomer"), false)
   assert.equal(privatePage.includes("rescheduleBooking"), false)
+})
+
+test("private booking access has a bounded post-appointment validity window", async () => {
+  const fixture = await createFixture("access-expiration")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+
+  assert.equal(
+    isBookingAccessExpired(new Date("2030-01-07T09:30:00Z"), new Date("2030-01-10T00:00:00Z")),
+    false,
+  )
+  assert.equal(
+    isBookingAccessExpired(new Date("2030-01-07T09:30:00Z"), new Date("2030-03-01T00:00:00Z")),
+    true,
+  )
+  const expired = await lookup(created.accessCode, {
+    now: () => new Date("2030-03-01T00:00:00Z"),
+  })
+  assert.deepEqual(expired, { ok: false, code: "UNAVAILABLE" })
 })

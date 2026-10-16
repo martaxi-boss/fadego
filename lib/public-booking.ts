@@ -11,6 +11,7 @@ import {
   canonicalizeAccessCode,
   hashAccessCode,
   issueBookingAccessToken,
+  isBookingAccessExpired,
   type AccessCodeGenerator,
   BookingAccessError,
 } from "@/lib/booking-access"
@@ -169,6 +170,7 @@ export type PublicAvailabilityOptions = {
 export type PrivateLookupOptions = {
   sourceIp?: string
   consumeLimit?: RateLimitConsumer
+  now?: () => Date
 }
 
 const safeHttpUrl = (value: string | null) => {
@@ -537,6 +539,7 @@ export const lookupPrivateBooking = async (
       booking: {
         select: {
           startsAt: true,
+          endsAt: true,
           status: true,
           serviceNameSnapshot: true,
           serviceDurationMinutes: true,
@@ -547,7 +550,12 @@ export const lookupPrivateBooking = async (
     },
   })
 
-  if (!access || access.revokedAt || !access.barbershop.timezone) {
+  if (
+    !access ||
+    access.revokedAt ||
+    !access.barbershop.timezone ||
+    isBookingAccessExpired(access.booking.endsAt, options.now?.() ?? new Date())
+  ) {
     return { ok: false, code: "UNAVAILABLE" }
   }
 

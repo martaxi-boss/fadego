@@ -1,0 +1,44 @@
+import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import { test } from "node:test"
+
+const service = readFileSync("deploy/staging/native/fadego-staging.service", "utf8")
+const http = readFileSync("deploy/staging/native/nginx-acme.conf", "utf8")
+const https = readFileSync("deploy/staging/native/nginx-https.conf", "utf8")
+const config = readFileSync("deploy/staging/native/runtime.env.example", "utf8")
+const guide = readFileSync("docs/STAGING_DUCKDNS.md", "utf8")
+
+test("native staging runs unprivileged and on localhost only", () => {
+  assert.match(service, /User=fadego-staging/)
+  assert.match(service, /Group=fadego-staging/)
+  assert.match(service, /EnvironmentFile=\/etc\/fadego-staging\/app\.env/)
+  assert.match(service, /--hostname 127\.0\.0\.1 --port 3100/)
+  assert.match(service, /NoNewPrivileges=yes/)
+  assert.match(service, /ProtectSystem=strict/)
+  assert.doesNotMatch(service, /ExecStart=.*docker/)
+})
+test("existing nginx can serve ACME without replacing other hostnames", () => {
+  assert.match(http, /server_name fadego\.duckdns\.org/)
+  assert.match(http, /listen 80;/)
+  assert.match(http, /location \^~ \/.well-known\/acme-challenge\//)
+  assert.doesNotMatch(http, /default_server/)
+  assert.match(https, /listen 443 ssl;/)
+  assert.match(https, /server_name fadego\.duckdns\.org/)
+  assert.doesNotMatch(https, /default_server/)
+  assert.match(https, /ssl_certificate .*fadego\.duckdns\.org\/fullchain\.pem/)
+})
+test("staging HTTPS uses a credential gate, noindex and sanitizes proxy forwarding", () => {
+  assert.match(https, /auth_basic_user_file \/etc\/nginx\/fadego-staging\.htpasswd/)
+  assert.match(https, /X-Robots-Tag "noindex, nofollow, noarchive"/)
+  assert.match(https, /proxy_pass http:\/\/127\.0\.0\.1:3100/)
+  assert.match(https, /proxy_set_header X-Forwarded-For \$remote_addr/)
+  assert.match(https, /proxy_set_header Authorization ""/)
+  assert.match(config, /NEXTAUTH_URL=https:\/\/fadego\.duckdns\.org/)
+  assert.match(config, /fadego_staging.*fadego_staging/)
+  assert.match(config, /FADEGO_TRUST_PROXY_HOPS=0/)
+})
+test("native deployment requires prior approval and must not install Docker", () => {
+  assert.match(guide, /sem autoridade do\s+Supervisor/)
+  assert.match(guide, /NÃO instalar o gateway Caddy/)
+  assert.match(guide, /sem tocar nos restantes projetos/)
+})

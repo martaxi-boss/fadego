@@ -82,3 +82,83 @@ isolamento de tenants e nenhuma cobrança real.
 
 **Não confundir** a pré-visualização já validada no GitHub com uma
 implantação real em `fadego.duckdns.org`.
+
+
+## Implementação para a VPS real: Nginx + Node.js 22 + PostgreSQL
+
+**Inventário comprovado em 16/10/2026**, via SSH autenticado e com fingerprint
+Ed25519 validada na [PR operacional #238](https://github.com/martaxi-boss/VPS/pull/238):
+
+| Componente | Estado |
+| --- | --- |
+| Node.js | v22 disponível |
+| Corepack | disponível; pnpm ainda não ativado |
+| Nginx | ativo, portas 80 e 443 já ocupadas |
+| PostgreSQL | serviço ativo, utilitários psql/pg_dump presentes |
+| Certbot | instalado |
+| Docker | não instalado |
+| Serviço FADEGO 127.0.0.1:3100 | não está ativo |
+| Certificado FADEGO | não visível |
+| HTTPS fadego.duckdns.org | não responde com TLS validado |
+
+**Por isso, NÃO instalar o gateway Caddy nem executar o Compose Docker desta
+pasta na VPS partilhada.** Os ficheiros de Docker permanecem apenas como opção
+isolada para outro servidor, sem interferência nos outros projetos.
+
+Para a VPS existente, utilizar **exclusivamente** os ficheiros versionados em
+\`deploy/staging/native/\`: serviço systemd sob utilizador dedicado, Nginx
+como proxy já existente e PostgreSQL em base de dados independente.
+
+### Ordem de ativação após autorização do Supervisor
+
+Não há aprovação de integração/deploy registada em \`AGENTS.md\`, pelo que
+**estes passos não foram executados**.
+
+1. Certificar que o hostname pertence ao Owner e que não há um virtual host
+   Nginx preexistente para \`fadego.duckdns.org\`. Não substituir nem editar
+   configuração existente sem inspecionar o conflito e obter autorização.
+2. No cofre atual da VPS, criar credenciais únicas para \`fadego_staging\`,
+   \`NEXTAUTH_SECRET\` e Basic Auth; nunca as registar em ficheiros públicos.
+3. Provisionar **novo** utilizador de sistema sem shell de login, diretório
+   \`/srv/fadego-staging\` e base Postgres \`fadego_staging\` com role próprio.
+   A base não é partilhada com nenhum outro serviço.
+4. Obter **somente** a revisão aprovada do PR #15 e conferir o SHA antes do
+   build. Com o Node.js 22 já presente, usar \`corepack pnpm install
+   --frozen-lockfile\` e \`corepack pnpm build\` na pasta desse release,
+   mantendo a cache e o serviço sob o utilizador de staging. Não alterar o
+   Node.js global nem instalar Docker.
+5. Aplicar \`corepack pnpm prisma migrate deploy\` na base exclusivamente
+   staging, verificar o estado das migrações e nunca executar migrações nas
+   bases de outros projetos.
+6. Criar o ficheiro protegido \`/etc/fadego-staging/app.env\` a partir de
+   \`deploy/staging/native/runtime.env.example\`, com permissões 0600 e
+   credenciais do cofre. Ativar o serviço systemd definido em
+   \`fadego-staging.service\`. Confirmar 200 em \`127.0.0.1:3100\`.
+7. Preparar ACME em \`/var/www/letsencrypt\`, utilizar a configuração
+   \`nginx-acme.conf\` para desafio HTTP-01 e obter certificado via Certbot
+   **webroot**, sem invocar \`certbot --nginx\` nem permitir reescrita
+   automática de vhosts alheios.
+8. Com o certificado emitido e o Basic Auth protegido no cofre, acrescentar
+   \`nginx-https.conf\` ao Nginx, **verificar conflitos de server_name**,
+   executar \`nginx -t\` e apenas fazer \`systemctl reload nginx\`.
+   Nunca reiniciar globalmente Nginx, Postgres ou outros serviços.
+9. Validar de fora por HTTPS: utilizador não autenticado recebe 401, conta
+   de demonstração entra com autenticação dupla, noindex está ativo, dados
+   são apenas fictícios, rotas de barbearias isoladas e sem pagamentos
+   reais. Executar \`node scripts/smoke-staging.mjs\` com credenciais do cofre.
+10. Registar rollback da revisão da aplicação e do único virtual host
+    FADEGO. Se surgir conflito, falhar sem tocar nos restantes projetos.
+
+### Regras de segurança
+
+- O Nginx nativo **não** pode abrir outra porta 80/443 nem substituir
+  configurações de outros sites.
+- A aplicação responde apenas em \`127.0.0.1:3100\`, não em \`0.0.0.0\`.
+- O \`FADEGO_TRUST_PROXY_HOPS=0\` mantém-se até validar explicitamente a
+  topologia e sanitização de cabeçalhos. Os limites por origem partilhada
+  não podem ser considerados controlo antiautomação suficiente em produção.
+- Sem email/SMS automático, pagamentos reais, utilizadores reais ou
+  indexação pública neste ambiente.
+- O \`AGENTS.md\` continua a proibir deploy/release sem autoridade do
+  Supervisor. A escolha do hostname e a confirmação do IP pelo Owner não
+  substituem essa aprovação.

@@ -1,0 +1,27 @@
+# Enable only after Supervisor approval. Requires existing Node 22 and
+# /etc/fadego-staging/app.env from the approved VPS secret vault.
+[Unit]
+Description=FADEGO isolated staging Next.js server
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=fadego-staging
+Group=fadego-staging
+WorkingDirectory=/srv/fadego-staging/current
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+EnvironmentFile=/etc/fadego-staging/app.env
+ExecStart=/usr/bin/node /srv/fadego-staging/current/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3100
+Restart=on-failure
+RestartSec=6
+UMask=0027
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/srv/fadego-staging/current/.next/cache
+
+[Install]
+WantedBy=multi-user.target

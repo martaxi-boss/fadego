@@ -559,6 +559,7 @@ export const lookupPrivateBooking = async (
     return { ok: false, code: "UNAVAILABLE" }
   }
 
+  const now = options.now?.() ?? new Date()
   const local = localBookingTime(
     access.booking.startsAt,
     access.barbershop.timezone,
@@ -578,9 +579,11 @@ export const lookupPrivateBooking = async (
       professionalName: access.booking.staffNameSnapshot,
       customerName: access.booking.customerNameSnapshot,
       canCancel:
-        access.booking.status === "CONFIRMED" ||
-        access.booking.status === "NEEDS_REASSIGNMENT",
-      canReschedule: access.booking.status === "CONFIRMED",
+        access.booking.startsAt > now &&
+        (access.booking.status === "CONFIRMED" ||
+          access.booking.status === "NEEDS_REASSIGNMENT"),
+      canReschedule:
+        access.booking.startsAt > now && access.booking.status === "CONFIRMED",
       status: access.booking.status,
     },
   }

@@ -159,7 +159,8 @@ const expectBookingCode = async (
     | "NO_CAPACITY"
     | "BOOKING_UNAVAILABLE"
     | "INVALID_STATUS"
-    | "OUTCOME_TOO_EARLY",
+    | "OUTCOME_TOO_EARLY"
+    | "ACTION_TOO_LATE",
 ) => {
   await assert.rejects(action, (error: unknown) => {
     assert.ok(error instanceof BookingEngineError)
@@ -909,4 +910,26 @@ test("administrators settle only elapsed confirmed appointments in their own ten
     }),
     "BOOKING_UNAVAILABLE",
   )
+})
+
+test("customer cannot cancel or reschedule after the original booking start", async () => {
+  const fixture = await createShop("past-customer-mutation")
+  await createGeneralChair(fixture.shop.id, 1)
+  const original = await createBooking(bookingInput(fixture, utc(9)))
+
+  await expectBookingCode(
+    () => cancelBookingByCustomer(fixture.shop.id, original.id, {
+      now: () => utc(9, 15),
+    }),
+    "ACTION_TOO_LATE",
+  )
+  await expectBookingCode(
+    () => rescheduleBooking(fixture.shop.id, original.id, utc(11), {
+      now: () => utc(9, 15),
+    }),
+    "ACTION_TOO_LATE",
+  )
+  const preserved = await db.booking.findUnique({ where: { id: original.id } })
+  assert.equal(preserved?.status, "CONFIRMED")
+  assert.equal(preserved?.startsAt.toISOString(), utc(9).toISOString())
 })

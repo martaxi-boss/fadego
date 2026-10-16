@@ -1011,3 +1011,19 @@ test("private booking access has a bounded post-appointment validity window", as
   })
   assert.deepEqual(expired, { ok: false, code: "UNAVAILABLE" })
 })
+
+test("private booking page does not offer actions after appointment start", async () => {
+  const fixture = await createFixture("late-private-view")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+  const result = await lookup(created.accessCode, {
+    now: () => new Date("2030-01-07T09:15:00.000Z"),
+  })
+  assert.equal(result.ok, true)
+  if (result.ok) {
+    assert.equal(result.booking.canCancel, false)
+    assert.equal(result.booking.canReschedule, false)
+  }
+})

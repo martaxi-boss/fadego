@@ -92,6 +92,7 @@ type PrivateAccess = {
   mode: "GENERAL_BOOKING" | "STAFF_BOOKING"
   staffMemberId: string | null
   serviceDurationMinutes: number
+  startsAt: Date
 }
 
 const resolvePrivateAccess = async (
@@ -110,6 +111,7 @@ const resolvePrivateAccess = async (
       booking: {
         select: {
           endsAt: true,
+          startsAt: true,
           status: true,
           mode: true,
           staffMemberId: true,
@@ -130,6 +132,7 @@ const resolvePrivateAccess = async (
     mode: token.booking.mode,
     staffMemberId: token.booking.staffMemberId,
     serviceDurationMinutes: token.booking.serviceDurationMinutes,
+    startsAt: token.booking.startsAt,
   }
 }
 
@@ -174,19 +177,21 @@ export const cancelPrivateBooking = async (
   }
 
   if (
-    access.status !== "CONFIRMED" &&
-    access.status !== "NEEDS_REASSIGNMENT"
+    (access.status !== "CONFIRMED" && access.status !== "NEEDS_REASSIGNMENT") ||
+    access.startsAt <= (options.now?.() ?? new Date())
   ) {
     return { ok: false, code: "ACTION_UNAVAILABLE" }
   }
 
   try {
-    await cancelBookingByCustomer(access.barbershopId, access.bookingId)
+    await cancelBookingByCustomer(access.barbershopId, access.bookingId, {
+      now: options.now ?? (() => new Date()),
+    })
     return { ok: true }
   } catch (error) {
     if (
       error instanceof BookingEngineError &&
-      error.code === "INVALID_STATUS"
+      (error.code === "INVALID_STATUS" || error.code === "ACTION_TOO_LATE")
     ) {
       return { ok: false, code: "ACTION_UNAVAILABLE" }
     }
@@ -219,7 +224,7 @@ export const getPrivateRescheduleAvailability = async (
     return { ok: false, code: "UNAVAILABLE" }
   }
 
-  if (access.status !== "CONFIRMED") {
+  if (access.status !== "CONFIRMED" || access.startsAt <= (options.now?.() ?? new Date())) {
     return { ok: false, code: "ACTION_UNAVAILABLE" }
   }
 
@@ -281,7 +286,7 @@ export const reschedulePrivateBooking = async (
     return { ok: false, code: "UNAVAILABLE" }
   }
 
-  if (access.status !== "CONFIRMED") {
+  if (access.status !== "CONFIRMED" || access.startsAt <= (options.now?.() ?? new Date())) {
     return { ok: false, code: "ACTION_UNAVAILABLE" }
   }
 
@@ -290,6 +295,7 @@ export const reschedulePrivateBooking = async (
       access.barbershopId,
       access.bookingId,
       parsed.data.startsAt,
+      { now: options.now ?? (() => new Date()) },
     )
     return { ok: true }
   } catch (error) {
@@ -302,6 +308,7 @@ export const reschedulePrivateBooking = async (
           return { ok: false, code: "SLOT_UNAVAILABLE" }
         case "STAFF_UNAVAILABLE":
         case "INVALID_STATUS":
+        case "ACTION_TOO_LATE":
           return { ok: false, code: "ACTION_UNAVAILABLE" }
         default:
           return { ok: false, code: "UNAVAILABLE" }

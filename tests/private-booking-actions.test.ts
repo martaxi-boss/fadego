@@ -218,6 +218,9 @@ const tokenForCode = (code: string) =>
 
 after(async () => {
   if (createdShopIds.length > 0) {
+    await db.bookingEmailOutbox.deleteMany({
+      where: { barbershopId: { in: createdShopIds } },
+    })
     await db.bookingAccessToken.deleteMany({
       where: { barbershopId: { in: createdShopIds } },
     })

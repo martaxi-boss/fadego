@@ -205,6 +205,9 @@ const lookup = (
 
 after(async () => {
   if (createdShopIds.length > 0) {
+    await db.bookingEmailOutbox.deleteMany({
+      where: { barbershopId: { in: createdShopIds } },
+    })
     await db.bookingAccessToken.deleteMany({
       where: { barbershopId: { in: createdShopIds } },
     })
@@ -1080,7 +1083,7 @@ test("public application surfaces wire canonical availability to booking and kee
   assert.match(privatePage, /dynamic = "force-dynamic"/)
   assert.match(
     privatePage,
-    /Guarda este acesso para cancelar ou remarcar a tua marcação/,
+    /Guarda este link privado para consultar, cancelar ou remarcar a tua marcação/,
   )
   assert.equal(privatePage.includes("cancelBookingByCustomer"), false)
   assert.equal(privatePage.includes("rescheduleBooking"), false)

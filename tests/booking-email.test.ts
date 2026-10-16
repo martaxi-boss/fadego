@@ -43,7 +43,7 @@ test("email confirmation contains a usable private booking link and no HTML inje
   assert.equal(message.to, payload.email)
   assert.match(message.subject, /FADEGO/)
   assert.match(message.text, /https:\/\/fadego\.duckdns\.org\/r\/ABCDEFGH/)
-  assert.match(message.text, /remarcar ou cancelar/)
+  assert.match(message.text, /altera o horário ou cancela/)
   assert.match(message.text, /Corte \+ barba/)
   assert.doesNotMatch(message.text, /Atelier\nBCC:/)
   assert.equal("html" in message, false)

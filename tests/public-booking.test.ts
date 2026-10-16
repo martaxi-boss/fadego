@@ -802,6 +802,7 @@ test("a booking atomically queues an encrypted one-time email and keeps token ha
   assert.ok(observed[2].includes(result.accessCode))
   const updated = await db.bookingEmailOutbox.findUnique({ where: { id: job.id } })
   assert.ok(updated?.acceptedAt)
+  assert.equal(updated?.sealedPayload, "", "accepted mail no longer needs the sealed private code")
   assert.equal(await deliverBookingEmail(job.id, {
     transport: async () => { throw new Error("Duplicate delivery") },
   }), "pending")

@@ -88,3 +88,9 @@ test("mail retries have their own restricted staging systemd unit", () => {
   assert.match(timer, /Unit=fadego-booking-email.service/)
   assert.doesNotMatch(service, /ExecStart=.*(sudo|docker)/)
 })
+
+test("private bearer URLs are excluded from staging Nginx access logs", () => {
+  assert.match(https, /location ~ \^\/\(r\|api\/private\/bookings\)\//)
+  assert.match(https, /access_log off;/)
+  assert.match(https, /proxy_set_header Authorization "";/)
+})

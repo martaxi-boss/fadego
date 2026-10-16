@@ -155,7 +155,12 @@ export const deliverBookingEmail = async (
   if (sent) {
     await db.bookingEmailOutbox.updateMany({
       where: { id: jobId, leaseUntil: lease, acceptedAt: null },
-      data: { acceptedAt: new Date(), leaseUntil: null, lastErrorCode: null },
+      data: {
+        acceptedAt: new Date(),
+        leaseUntil: null,
+        lastErrorCode: null,
+        sealedPayload: "", // remove sensitive encrypted content after provider acceptance
+      },
     })
     return "accepted"
   }

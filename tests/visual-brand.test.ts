@@ -51,3 +51,12 @@ test("the CI browser presentation captures desktop and mobile login", () => {
   assert.match(capture, /13-login-desktop\.jpg/)
   assert.match(capture, /14-login-mobile\.jpg/)
 })
+
+test("booking form requires valid email and describes private actions", () => {
+  const flow = readFileSync("app/b/[slug]/public-booking-flow.tsx", "utf8")
+  assert.match(flow, /Email <span className="font-semibold/)
+  assert.match(flow, /type="email"/)
+  assert.match(flow, /aria-describedby="booking-email-explanation"/)
+  assert.match(flow, /para consultar, remarcar ou cancelar/)
+  assert.match(flow, /EMAIL_UNAVAILABLE/)
+})

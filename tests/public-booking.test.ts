@@ -740,6 +740,101 @@ test("database prevents cross-tenant BookingAccessToken references", async () =>
   )
 })
 
+
+test("customer email is mandatory and invalid emails cause no booking side effects", async () => {
+  const fixture = await createFixture("mandatory-email")
+  await addGeneralChair(fixture.shop.id)
+  for (const value of ["", "   ", "invalido", "a@b", "a@invalid domain"]) {
+    const result = await createPublicBooking(
+      {
+        ...publicInput(fixture),
+        customer: {
+          ...publicInput(fixture).customer,
+          email: value,
+        },
+      },
+      { sourceIp: "198.51.100.198", clock: bookingClock, consumeLimit: allowLimit },
+    )
+    assert.deepEqual(result, { ok: false, code: "INVALID_INPUT" })
+  }
+  assert.equal(await db.booking.count({ where: { barbershopId: fixture.shop.id } }), 0)
+  assert.equal(await db.bookingEmailOutbox.count({ where: { barbershopId: fixture.shop.id } }), 0)
+})
+
+test("a booking atomically queues an encrypted one-time email and keeps token hashes private", async () => {
+  const { openBookingEmail } = await import("../lib/booking-email-crypto")
+  const { deliverBookingEmail } = await import("../lib/booking-email")
+  const fixture = await createFixture("confirmation-outbox")
+  await addGeneralChair(fixture.shop.id)
+  const result = await createPublic(fixture)
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+
+  const job = await db.bookingEmailOutbox.findUnique({
+    where: { id: result.emailNotificationId },
+  })
+  assert.ok(job)
+  assert.equal(job.barbershopId, fixture.shop.id)
+  assert.equal(job.attemptCount, 0)
+  assert.equal(job.acceptedAt, null)
+  assert.equal(job.sealedPayload.includes(result.accessCode), false)
+  assert.equal(JSON.stringify(job).includes(result.accessPath), false)
+
+  const decrypted = openBookingEmail(job.sealedPayload)
+  assert.equal(decrypted.email, "maria@example.test")
+  assert.equal(decrypted.accessCode, result.accessCode)
+  assert.equal(decrypted.serviceName, fixture.service.name)
+
+  const observed: string[] = []
+  const accepted = await deliverBookingEmail(result.emailNotificationId, {
+    transport: async (message, id) => {
+      observed.push(message.to, message.subject, message.text, id)
+      return true
+    },
+  })
+  assert.equal(accepted, "accepted")
+  assert.deepEqual(observed.slice(0, 1), ["maria@example.test"])
+  assert.match(observed[2], /Código privado:/)
+  assert.match(observed[2], /\/r\//)
+  assert.ok(observed[2].includes(result.accessCode))
+  const updated = await db.bookingEmailOutbox.findUnique({ where: { id: job.id } })
+  assert.ok(updated?.acceptedAt)
+  assert.equal(await deliverBookingEmail(job.id, {
+    transport: async () => { throw new Error("Duplicate delivery") },
+  }), "pending")
+
+  const privatePage = await lookup(result.accessCode)
+  assert.equal(privatePage.ok, true)
+  if (privatePage.ok) assert.equal(privatePage.booking.emailDeliveryStatus, "ACCEPTED")
+})
+
+test("failed mail provider attempts are safely retried without losing the booking", async () => {
+  const { deliverBookingEmail } = await import("../lib/booking-email")
+  const fixture = await createFixture("confirmation-retry")
+  await addGeneralChair(fixture.shop.id)
+  const result = await createPublic(fixture)
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(await deliverBookingEmail(result.emailNotificationId, {
+    transport: async () => false,
+  }), "pending")
+  const job = await db.bookingEmailOutbox.findUnique({ where: { id: result.emailNotificationId } })
+  assert.equal(job?.attemptCount, 1)
+  assert.equal(job?.acceptedAt, null)
+  assert.equal(job?.lastErrorCode, "PROVIDER_REFUSED")
+  assert.ok(job?.nextAttemptAt)
+  // Simulate the retry window; no external email API requests in this test.
+  await db.bookingEmailOutbox.update({
+    where: { id: result.emailNotificationId },
+    data: { nextAttemptAt: new Date("2000-01-01T00:00:00.000Z") },
+  })
+  const accepted = await deliverBookingEmail(result.emailNotificationId, {
+    transport: async () => true,
+  })
+  assert.equal(accepted, "accepted")
+  assert.equal(await db.booking.count({ where: { barbershopId: fixture.shop.id } }), 1)
+})
+
 test("public booking requires no customer authentication identity", () => {
   const parsed = publicBookingInputSchema.safeParse({
     barbershopSlug: "example-shop",
@@ -748,7 +843,7 @@ test("public booking requires no customer authentication identity", () => {
     customer: {
       name: "No Account",
       phone: "+12025550123",
-      email: "",
+      email: "noconta@example.test",
     },
   })
 

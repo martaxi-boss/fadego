@@ -7,6 +7,7 @@ import {
   isValidAgendaDate,
   localAgendaDate,
   resolveAgendaTimezone,
+  resolveAgendaProfessionalFilter,
 } from "@/lib/admin-agenda"
 import {
   cancelTenantBookingAction,
@@ -42,7 +43,7 @@ export default async function AgendaPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ date?: string | string[]; status?: string | string[]; notice?: string | string[] }>
+  searchParams: Promise<{ date?: string | string[]; status?: string | string[]; professional?: string | string[]; notice?: string | string[] }>
 }) {
   const { slug } = await params
   const query = await searchParams
@@ -59,13 +60,14 @@ export default async function AgendaPage({
   const requestedStatus = asText(query.status)
   const selectedStatus = requestedStatus in statusLabels ? requestedStatus : "ALL"
   const window = agendaUtcSearchWindow(date)
-  const [records, staff, generalChairCount] = await Promise.all([
+  const [records, staff, professionals, generalChairCount] = await Promise.all([
     db.booking.findMany({
     where: { barbershopId: access.barbershop.id, startsAt: window },
     select: {
       id: true,
       startsAt: true,
       endsAt: true,
+      staffMemberId: true,
       status: true,
       serviceNameSnapshot: true,
       serviceDurationMinutes: true,
@@ -88,14 +90,29 @@ export default async function AgendaPage({
       select: { id: true, name: true },
       orderBy: [{ name: "asc" }, { id: "asc" }],
     }),
+    db.staffMember.findMany({
+      where: { barbershopId: access.barbershop.id },
+      select: { id: true, name: true, archivedAt: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    }),
     db.chair.count({
       where: { barbershopId: access.barbershop.id, active: true, mode: "GENERAL_BOOKING" },
     }),
   ])
   const allDay = records.filter((item) => localAgendaDate(item.startsAt, timeZone) === date)
-  const visible = selectedStatus === "ALL"
+  const selectedProfessional = resolveAgendaProfessionalFilter(
+    query.professional,
+    professionals.map((professional) => professional.id),
+  )
+  const byStatus = selectedStatus === "ALL"
     ? allDay
     : allDay.filter((item) => item.status === selectedStatus)
+  const visible = byStatus.filter((item) =>
+    selectedProfessional === "ALL" ||
+    (selectedProfessional === "GENERAL"
+      ? item.staffMemberId === null
+      : item.staffMemberId === selectedProfessional),
+  )
   const canManage = access.membership.role !== "STAFF"
   const hour = new Intl.DateTimeFormat("pt-PT", {
     timeZone,
@@ -107,6 +124,12 @@ export default async function AgendaPage({
   const basePath = "/admin/" + access.barbershop.slug + "/agenda"
   const notice = asText(query.notice)
   const now = new Date()
+  const dateHref = (newDate: string) => {
+    const params = new URLSearchParams({ date: newDate })
+    if (selectedStatus !== "ALL") params.set("status", selectedStatus)
+    if (selectedProfessional !== "ALL") params.set("professional", selectedProfessional)
+    return basePath + "?" + params.toString()
+  }
 
   return (
     <div className="space-y-6">
@@ -157,13 +180,26 @@ export default async function AgendaPage({
               ))}
             </select>
           </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Profissional
+            <select name="professional" defaultValue={selectedProfessional}
+              className="mt-1 block max-w-full rounded-lg border border-gray-300 px-3 py-2">
+              <option value="ALL">Todos os profissionais</option>
+              <option value="GENERAL">Atendimento geral</option>
+              {professionals.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}{person.archivedAt ? " (arquivado)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <button className="rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
             type="submit">Filtrar</button>
           <div className="flex items-center gap-2 sm:ml-auto">
             <Link className="rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50"
-              href={basePath + "?date=" + adjacentAgendaDate(date, -1)}>← Anterior</Link>
+              href={dateHref(adjacentAgendaDate(date, -1))}>← Anterior</Link>
             <Link className="rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50"
-              href={basePath + "?date=" + adjacentAgendaDate(date, 1)}>Seguinte →</Link>
+              href={dateHref(adjacentAgendaDate(date, 1))}>Seguinte →</Link>
           </div>
         </form>
       </section>
@@ -195,7 +231,9 @@ export default async function AgendaPage({
               <p className="text-sm text-gray-500">
                 {booking.staffNameSnapshot ?? "Atendimento geral"} · Cadeira {booking.chairNumberSnapshot}
               </p>
-              <p className="text-sm text-gray-500">Contacto: {booking.customerPhoneSnapshot}</p>
+              {canManage ? (
+                <p className="text-sm text-gray-500">Contacto: {booking.customerPhoneSnapshot}</p>
+              ) : null}
             </div>
             {canManage ? (
               <div className="flex flex-wrap gap-2">

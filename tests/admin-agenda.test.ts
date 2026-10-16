@@ -6,6 +6,7 @@ import {
   isValidAgendaDate,
   localAgendaDate,
   resolveAgendaTimezone,
+  resolveAgendaProfessionalFilter,
 } from "../lib/admin-agenda"
 
 test("agenda accepts only real ISO calendar dates", () => {
@@ -33,4 +34,14 @@ test("agenda UTC search window covers extreme timezone offsets without dropping 
   assert.equal(adjacentAgendaDate("2026-12-31", 1), "2027-01-01")
   assert.equal(adjacentAgendaDate("2026-01-01", -1), "2025-12-31")
   assert.throws(() => agendaUtcSearchWindow("2026-02-30"))
+})
+
+test("agenda professional filter accepts only a tenant's listed staff identities", () => {
+  const ownStaff = ["d5275916-65a3-46ca-9ea0-7e5a3e492cee"]
+  assert.equal(resolveAgendaProfessionalFilter("GENERAL", ownStaff), "GENERAL")
+  assert.equal(resolveAgendaProfessionalFilter("ALL", ownStaff), "ALL")
+  assert.equal(resolveAgendaProfessionalFilter(ownStaff[0], ownStaff), ownStaff[0])
+  assert.equal(resolveAgendaProfessionalFilter("6e73b45b-e885-476d-94a9-15e99a7350cf", ownStaff), "ALL")
+  assert.equal(resolveAgendaProfessionalFilter(["GENERAL"], ownStaff), "ALL")
+  assert.equal(resolveAgendaProfessionalFilter(undefined, ownStaff), "ALL")
 })

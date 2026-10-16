@@ -20,7 +20,9 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Customer directory restricted to OWNER/ADMIN
 - [ ] Advanced staff-restricted agenda and real barbershop workflow tests
 - [ ] API audit, dependency audit, performance, accessibility and stress tests
-- [ ] Operational notifications with opt-out and retry policies
+- [x] Public booking requires customer email; encrypted confirmation outbox with automatic retries (code/CI)
+- [ ] Provider-approved real email sender, domain verification, live delivery proof, and opt-out policies for other notifications
+- [ ] Further operational notifications (e.g. cancellations, remarcações), with approved policies
 - [x] One-time guarded SUPER_ADMIN bootstrap tool for a fresh database
 - [ ] Password recovery and approved provisioning/recovery for existing installations
 - [x] Ephemeral CI Postgres backup/restore rehearsal with synthetic tenant/customer data

@@ -169,8 +169,9 @@ Não há aprovação de integração/deploy registada em \`AGENTS.md\`, pelo que
 - O \`FADEGO_TRUST_PROXY_HOPS=0\` mantém-se até validar explicitamente a
   topologia e sanitização de cabeçalhos. Os limites por origem partilhada
   não podem ser considerados controlo antiautomação suficiente em produção.
-- Sem email/SMS automático, pagamentos reais, utilizadores reais ou
-  indexação pública neste ambiente.
+- Envio de email **apenas após** aprovação do remetente, domínio verificado,
+  chave do cofre e teste real de receção. Sem SMS automático, pagamentos reais,
+  utilizadores reais ou indexação pública neste ambiente.
 - O \`AGENTS.md\` continua a proibir deploy/release sem autoridade do
   Supervisor. A escolha do hostname e a confirmação do IP pelo Owner não
   substituem essa aprovação.
@@ -207,3 +208,73 @@ de todas as verificações e TLS estarem aprovados.
   autorizado reinicia **apenas** `fadego-staging.service` depois do teste.
   Se o serviço falhar, regressar ao symlink da revisão anterior e
   verificar a compatibilidade da base antes de retomar.
+
+
+## Reserva com email obrigatório e link privado (17/10/2026)
+
+O cliente passa a ter de introduzir um endereço de email válido para
+concluir a reserva. Sem o serviço de envio configurado, o endpoint devolve
+**503 EMAIL_UNAVAILABLE ANTES de criar qualquer marcação**. Não são aceites
+marcações que não tenham capacidade de serem confirmadas por email.
+
+**Fluxo ao ativar após o Human Gate do remetente:**
+
+1. O cliente escolhe serviço, profissional (ou livre), dia/hora, nome,
+   telefone e **email obrigatório**. Não precisa de conta FADEGO.
+2. A mesma transação PostgreSQL cria Cliente, Booking, token privado
+   (apenas SHA-256) e **BookingEmailOutbox com o código encriptado AES-GCM**.
+   Se um passo falhar, não existe reserva parcial.
+3. Depois de a transação terminar, o servidor tenta enviar a confirmação
+   diretamente via HTTPS Resend, com remetente verificado, endereço da
+   barbearia, serviço, dia/hora inicial, código e URL privado
+   `https://fadego.duckdns.org/r/CODIGO`. O fornecedor confirma a
+   **aceitação do pedido**, não garante entrada na caixa de correio.
+4. O mesmo link permite consultar o estado atual, **remarcar** e
+   **cancelar** antes do início da reserva; as regras de disponibilidade
+   e de isolamento entre barbearias já existentes continuam a ser usadas.
+   Em alterações posteriores, o link original continua válido e mostra
+   os dados atualizados.
+5. Se o fornecedor falhar, a marcação mantém-se válida e a página privada
+   assinala envio **pendente**. O trabalho encriptado fica no PostgreSQL
+   e `fadego-booking-email.timer` tenta novamente de cinco em cinco
+   minutos; os intervalos aumentam até no máximo uma hora por tentativa.
+   Para não multiplicar emails, cada pedido utiliza um Idempotency-Key
+   estável. O sistema não afirma que um email chegou só por haver HTTP 200.
+6. Nenhum email sai dos testes de CI: os testes usam remetentes fictícios
+   e transportes falsos. O cliente de envio não é invocado sem
+   `BOOKING_EMAIL_PROVIDER=resend`, `BOOKING_EMAIL_FROM` válido,
+   `BOOKING_EMAIL_API_KEY` e `NEXTAUTH_SECRET` carregados
+   pelo ambiente autorizado.
+
+**Human Gate real (já definido no projeto):** escolher/autorizar um serviço
+de email transacional, domínio e endereço remetente verificáveis, tratamento
+RGPD, custos, e ativação apenas na VPS de testes depois da autorização
+do Supervisor. Foi implementado um adaptador opcional para Resend sem
+dependências npm novas; não existe credencial nem conta Resend criada
+automaticamente e o envio real **não está ativo**.
+
+- Definir `BOOKING_EMAIL_PROVIDER=resend` e remetente/chave no cofre
+  da VPS, nunca em Issues, GitHub, ficheiros de código ou screenshots.
+- Usar chave de API de permissões **somente de envio** e, se disponível,
+  restrita ao domínio remetente.
+- Instalar/ativar **apenas após aprovação** os ficheiros
+  `deploy/staging/native/fadego-booking-email.service` e
+  `fadego-booking-email.timer` junto do serviço FADEGO. Não instalar
+  um novo coordenador, cron geral, Docker, Nginx ou serviço de terceiros.
+- Confirmar com uma reserva de demonstração autorizada que o email chega
+  realmente e que o código abre `/r/...`, antes de aceitar dados reais.
+- Vigiar quantos trabalhos permanecem pendentes, `attemptCount` e
+  `lastErrorCode` **sem** publicar `sealedPayload`, emails ou tokens.
+- Não alterar `NEXTAUTH_SECRET` enquanto existirem mensagens pendentes:
+  a chave AES é derivada exclusivamente deste segredo. Uma rotação
+  exige plano de migração/reencriptação dos trabalhos pendentes.
+- Os códigos privados continuam a expirar 30 dias após o fim da reserva.
+  Os registos cifrados de email devem entrar na política de retenção RGPD,
+  que ainda carece de definição/aprovação; não apagar histórico existente
+  arbitrariamente.
+
+**Importante:** os emails de aviso de remarcação/cancelamento e SMS são
+melhorias posteriores. Nesta etapa o email de **confirmação inicial**
+contém o link que permite ao cliente gerir a marcação a qualquer momento
+dentro das regras. Sem uma conta/remetente autorizados, apenas o
+código e os testes locais estão prontos, **não existe entrega real de emails**.

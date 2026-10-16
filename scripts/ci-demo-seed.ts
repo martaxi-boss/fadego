@@ -63,7 +63,7 @@ async function main() {
       data: { barbershopId: shop.id, name: "Corte masculino", description: "Corte personalizado e acabamento.", price: "18.00", durationMinutes: 30 },
     }),
     await db.service.create({
-      data: { barbershopId: shop.id, name: "Barba e acabamento", description: "Barba, contornos e tratamento.", price: "12.00", durationMinutes: 20 },
+      data: { barbershopId: shop.id, name: "Barba e acabamento", description: "Barba, contornos e tratamento.", price: "12.00", durationMinutes: 30 },
     }),
     await db.service.create({
       data: { barbershopId: shop.id, name: "Corte + Barba", description: "Experiência completa de barbearia.", price: "28.00", durationMinutes: 45 },

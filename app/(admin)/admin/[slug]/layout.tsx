@@ -32,6 +32,8 @@ export default async function TenantAdminLayout({
       homeHref={homeHref}
       navigation={[
         { href: homeHref, label: "Visão geral" },
+        { href: `${homeHref}/agenda`, label: "Agenda" },
+        { href: `${homeHref}/customers`, label: "Clientes" },
         { href: `${homeHref}/professionals`, label: "Profissionais" },
         { href: `${homeHref}/chairs`, label: "Cadeiras" },
         { href: `${homeHref}/services`, label: "Serviços" },

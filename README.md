@@ -1,34 +1,57 @@
 # FADEGO
 
-FADEGO is a multi-tenant web/PWA for autonomous barbershop operations.
+FADEGO is a multi-tenant barbershop operations platform. This repository is the
+canonical Next.js application; it is not a native Floot project.
 
-The current implementation contains the accepted Phase-1 foundation plus the operational configuration layer for tenant-scoped professionals, chairs, services, and weekly opening hours. Booking, customers, capacity/overlap logic, memberships, payments, DNS, deployment, and production infrastructure remain intentionally outside this gate.
+## Current implemented scope
 
-## Stack
+- Independent barbershop (tenant) management with OWNER/ADMIN/STAFF roles.
+- Professionals, up to five chairs, services, opening hours and operational settings.
+- Transaction-safe booking engine, availability and overlap prevention.
+- Public reservation flow without a customer account; private confirmation,
+  cancellation and rescheduling through hashed access codes.
+- Tenant-scoped administrator agenda and searchable customer list.
+- Club plans, enrollments, entitlements and usage recording.
+- Provider-neutral ledger for Club payments and platform SaaS subscriptions.
+  **No real processor, checkout, billing webhook or financial effect is wired in.**
+- Read-only super-admin platform metrics.
 
-- Next.js 16 / React 19 / TypeScript
-- Tailwind CSS 4
-- PostgreSQL
-- Prisma 7
-- NextAuth 4 credentials authentication
-- Zod validation
-- `rate-limiter-flexible` with PostgreSQL persistence
+## Technical stack
 
-## Local setup
+Next.js 16, React 19, TypeScript, Tailwind CSS 4, Prisma 7,
+PostgreSQL 16, NextAuth 4 and Zod. Node.js 22 and pnpm 10.
 
-1. Install Node.js 22 and pnpm 10.
-2. Copy `.env.example` to `.env.local` and replace every placeholder.
-3. Start a local PostgreSQL instance. `docker compose up -d postgres` is provided as an optional local helper.
-4. Run `pnpm install --frozen-lockfile`.
-5. Run `pnpm prisma migrate deploy`.
-6. Run `pnpm dev`.
+## Development
 
-No public self-registration exists. Administrative users must be provisioned through an authorized administrative/bootstrap process outside this gate; passwords stored in `User.passwordHash` must use the supplied scrypt format.
+1. Copy `.env.example` to `.env.local` and replace the placeholders.
+2. Run `docker compose up -d postgres` for a local database.
+3. Run `pnpm install --frozen-lockfile`.
+4. Run `pnpm prisma migrate deploy`.
+5. Run `pnpm dev`.
 
-Operational configuration writes are restricted to active tenant OWNER/ADMIN memberships. STAFF may read the tenant configuration but cannot mutate professionals, chairs, services, or opening hours.
+There is intentionally no public administrator self-registration. Provision
+administrative identities through an authorized bootstrap procedure.
 
-## Validation
+## Trusted reverse proxy and booking limits
 
-`pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm prisma validate`, migration deployment/status, and `pnpm secret:scan` are exercised by CI against PostgreSQL.
+`FADEGO_TRUST_PROXY_HOPS` defaults to `0` (fail-closed). The application
+ignores untrusted client IP headers in that mode. Configure the exact number
+(1–5) of trusted append-only forwarding proxies in the final hosting ingress.
+**Do not guess this value** or enable it unless the entry proxy strips/extends
+inbound client-controlled `X-Forwarded-For`. Until configured, shared
+tenant-scoped source limits may restrict legitimate public bookings.
 
-See `THIRD_PARTY_NOTICES.md` and `docs/REUSE_SOURCES.md` for provenance.
+Public booking creation uses separate source, phone and combined budgets.
+Booking links are private bearer credentials; avoid logging or public sharing.
+
+## Validation and release
+
+CI runs migrations, tests, typecheck, lint, production build and secret scan
+against PostgreSQL. Commands: `pnpm test`, `pnpm typecheck`,
+`pnpm lint`, `pnpm build`, `pnpm secret:scan`.
+
+Current repository is **not a completed production rollout**. Read
+`docs/PRODUCTION_READINESS.md` before connecting payment providers,
+DNS, real customer data or production hosting.
+
+Provenance: `THIRD_PARTY_NOTICES.md` and `docs/REUSE_SOURCES.md`.

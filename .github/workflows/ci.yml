@@ -143,3 +143,15 @@ jobs:
           name: fadego-visual-demo
           path: demo-shots/
           retention-days: 14
+
+      - name: Validate staging container and gateway config
+        if: github.event_name == 'pull_request' && github.head_ref == 'integration/20261016-fadego-candidate'
+        env:
+          FADEGO_STAGING_DB_PASSWORD: ci_fake_hex_password_0000000000000000
+          FADEGO_STAGING_NEXTAUTH_SECRET: ci_staging_placeholder_secret_never_deploy
+          FADEGO_STAGING_GATE_USER: ci-pilot
+          FADEGO_STAGING_GATE_HASH: ci_fake_bcrypt_hash_for_config_only
+        run: |
+          set -euo pipefail
+          docker compose -f deploy/staging/compose.yml --profile dedicated-host config --quiet
+          docker build -f deploy/staging/Dockerfile -t fadego-staging:ci .

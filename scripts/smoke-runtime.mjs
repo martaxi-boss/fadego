@@ -39,7 +39,7 @@ assert.equal(
 )
 assert.match(
   privateLookup.body,
-  /Marca.c.o indispon.vel/i,
+  /Marcação indisponível/i,
   "invalid booking codes must not disclose a booking",
 )
 assert.match(

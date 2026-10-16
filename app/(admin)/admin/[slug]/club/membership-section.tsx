@@ -1,5 +1,7 @@
 import type { TenantRole } from "@prisma/client"
 import { getMemberships } from "@/lib/club-memberships"
+import { resolveAgendaTimezone } from "@/lib/admin-agenda"
+import { canViewCustomerContactDetails } from "@/lib/tenant-presentation"
 import { db } from "@/lib/prisma"
 import {
   enrollExistingCustomerAction,
@@ -48,6 +50,7 @@ export default async function ClubMembershipSection({
   role: TenantRole
 }) {
   const canManage = role === "OWNER" || role === "ADMIN"
+  const canViewContacts = canViewCustomerContactDetails(role)
   const [memberships, plans, customers, shop] = await Promise.all([
     getMemberships(barbershopId),
     db.membershipPlan.findMany({
@@ -63,7 +66,7 @@ export default async function ClubMembershipSection({
       },
       orderBy: [{ name: "asc" }, { id: "asc" }],
     }),
-    db.customer.findMany({
+    canManage ? db.customer.findMany({
       where: { barbershopId },
       select: {
         id: true,
@@ -72,13 +75,13 @@ export default async function ClubMembershipSection({
         email: true,
       },
       orderBy: [{ name: "asc" }, { id: "asc" }],
-    }),
+    }) : Promise.resolve([]),
     db.barbershop.findUnique({
       where: { id: barbershopId },
       select: { timezone: true },
     }),
   ])
-  const timezone = shop?.timezone || "UTC"
+  const timezone = resolveAgendaTimezone(shop?.timezone ?? null)
   const format = formatter(timezone)
 
   return (
@@ -224,12 +227,14 @@ export default async function ClubMembershipSection({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold">{membership.customer.name}</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  {membership.customer.phone}
-                  {membership.customer.email
-                    ? ` · ${membership.customer.email}`
-                    : ""}
-                </p>
+                {canViewContacts ? (
+                  <p className="mt-1 text-sm text-gray-600">
+                    {membership.customer.phone}
+                    {membership.customer.email
+                      ? ` · ${membership.customer.email}`
+                      : ""}
+                  </p>
+                ) : null}
                 <p className="mt-2 text-sm font-medium">
                   {membership.planNameSnapshot} · €
                   {membership.planPriceSnapshot.toFixed(2)}

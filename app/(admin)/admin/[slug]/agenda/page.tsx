@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
+import { canViewCustomerContactDetails } from "@/lib/tenant-presentation"
 import {
   adjacentAgendaDate,
   agendaUtcSearchWindow,
@@ -114,6 +115,7 @@ export default async function AgendaPage({
       : item.staffMemberId === selectedProfessional),
   )
   const canManage = access.membership.role !== "STAFF"
+  const canViewContacts = canViewCustomerContactDetails(access.membership.role)
   const hour = new Intl.DateTimeFormat("pt-PT", {
     timeZone,
     hour: "2-digit",
@@ -231,7 +233,7 @@ export default async function AgendaPage({
               <p className="text-sm text-gray-500">
                 {booking.staffNameSnapshot ?? "Atendimento geral"} · Cadeira {booking.chairNumberSnapshot}
               </p>
-              {canManage ? (
+              {canViewContacts ? (
                 <p className="text-sm text-gray-500">Contacto: {booking.customerPhoneSnapshot}</p>
               ) : null}
             </div>

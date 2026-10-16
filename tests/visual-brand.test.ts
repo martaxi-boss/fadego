@@ -4,6 +4,8 @@ import { test } from "node:test"
 
 const home = readFileSync("app/page.tsx", "utf8")
 const login = readFileSync("app/login/page.tsx", "utf8")
+const publicBooking = readFileSync("app/b/[slug]/page.tsx", "utf8")
+const capture = readFileSync("scripts/ci-capture-ux.cjs", "utf8")
 const shell = readFileSync("app/_components/admin-shell.tsx", "utf8")
 const illustration = readFileSync("public/fadego-atelier.svg", "utf8")
 const mark = readFileSync("public/fadego-mark.svg", "utf8")
@@ -35,4 +37,17 @@ test("login form and accessible image description remain functional", () => {
   assert.match(home, /alt="Ilustração de uma barbearia/)
   assert.match(home, /h-\[410px\]/)
   assert.match(home, /sm:h-\[560px\]/)
+})
+
+test("the customer booking screen shows each barbershop's own identity and retains the original flow", () => {
+  assert.match(publicBooking, /catalog\.name/)
+  assert.match(publicBooking, /catalog\.logoUrl/)
+  assert.match(publicBooking, /<PublicBookingFlow/)
+  assert.match(publicBooking, /generalAvailable=\{catalog\.generalAvailable\}/)
+  assert.match(publicBooking, /Reserva sem criar conta/)
+})
+
+test("the CI browser presentation captures desktop and mobile login", () => {
+  assert.match(capture, /13-login-desktop\.jpg/)
+  assert.match(capture, /14-login-mobile\.jpg/)
 })

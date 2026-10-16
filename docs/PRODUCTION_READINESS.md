@@ -13,7 +13,7 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Read-only super-admin metrics
 - [x] Anti-abuse hardening: explicit proxy trust, phone/source budgets
 - [x] Expiry enforcement for private access codes 30 days after appointment end
-- [x] CI includes all development branches and main on push
+- [x] CI runs on main/builder pushes, on all pull requests and manually; obsolete PR runs are cancelled
 - [x] Protected booking completion and no-show actions (only after appointment end)
 - [x] Protected reassignments through existing transactional booking engine
 - [x] Customer directory restricted to OWNER/ADMIN

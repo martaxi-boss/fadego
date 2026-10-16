@@ -1,43 +1,6 @@
 import Link from "next/link"
 import { requireBarbershopBySlug } from "@/lib/authorization"
-
-const modules = [
-  {
-    href: "agenda",
-    label: "Agenda",
-    detail: "Consulta as reservas do dia, estados, profissionais e cancelamentos.",
-  },
-  {
-    href: "customers",
-    label: "Clientes",
-    detail: "Contactos e histórico de reservas e adesões Club.",
-  },
-  {
-    href: "professionals",
-    label: "Profissionais",
-    detail: "Identidade operacional, fotografia e ciclo de vida.",
-  },
-  {
-    href: "chairs",
-    label: "Cadeiras",
-    detail: "Até cinco cadeiras e modos Walk-in, Reserva geral ou profissional.",
-  },
-  {
-    href: "services",
-    label: "Serviços",
-    detail: "Preço, duração em grelha de 15 minutos e ativação.",
-  },
-  {
-    href: "hours",
-    label: "Horários",
-    detail: "Horário semanal geral da barbearia.",
-  },
-  {
-    href: "club",
-    label: "Club",
-    detail: "Planos, adesões, limites por serviço e gestão de utilizações.",
-  },
-] as const
+import { tenantModulesForRole } from "@/lib/admin-navigation"
 
 export default async function TenantOverviewPage({
   params,
@@ -50,14 +13,15 @@ export default async function TenantOverviewPage({
     "ADMIN",
     "STAFF",
   ])
+  const modules = tenantModulesForRole(access.membership.role)
 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-semibold">Visão geral</h1>
         <p className="mt-3 max-w-2xl leading-7 text-gray-600">
-          Gestão de {access.barbershop.name}: marcações, equipa, cadeiras, serviços,
-          horários, clientes e Club. A cobrança online aguarda a fase de pagamentos.
+          Gestão diária de {access.barbershop.name}: marcações, equipa, cadeiras,
+          serviços, horários e Club. A cobrança online ainda não está ativa.
         </p>
       </section>
 

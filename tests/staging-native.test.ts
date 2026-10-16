@@ -37,6 +37,18 @@ test("staging HTTPS uses a credential gate, noindex and sanitizes proxy forwardi
   assert.match(config, /fadego_staging.*fadego_staging/)
   assert.match(config, /FADEGO_TRUST_PROXY_HOPS=0/)
 })
+test("native release builder remains strictly staging-only and unprivileged", () => {
+  const script = readFileSync("deploy/staging/native/build-release.sh", "utf8")
+  assert.match(script, /FADEGO_STAGING_APPROVED_SHA/)
+  assert.match(script, /FADEGO_STAGING_SUPERVISOR_APPROVED/)
+  assert.match(script, /id -un/)
+  assert.match(script, /fadego_staging/)
+  assert.match(script, /corepack pnpm install --frozen-lockfile/)
+  assert.match(script, /corepack pnpm prisma migrate deploy/)
+  assert.match(script, /--branch integration\/20261016-fadego-candidate/)
+  assert.doesNotMatch(script, /\bsudo\b|\bsystemctl\b|\bdocker\b/)
+})
+
 test("native deployment requires prior approval and must not install Docker", () => {
   assert.match(guide, /sem autoridade do\s+Supervisor/)
   assert.match(guide, /NÃO instalar o gateway Caddy/)

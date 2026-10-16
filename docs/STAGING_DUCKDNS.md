@@ -1,5 +1,10 @@
 # FADEGO — ambiente de testes `fadego.duckdns.org`
 
+> **VPS atual:** Nginx + Node.js 22 + PostgreSQL + Certbot. Para esta VPS
+> usar apenas a secção **Implementação para a VPS real** no fim.
+> Os passos Docker/Compose anteriores destinam-se exclusivamente a
+> um servidor dedicado separado e **não devem correr na VPS partilhada**.
+
 Aprovado pelo owner como **endereço de testes** em 16/10/2026. A fonte
 canónica continua a ser `martaxi-boss/fadego`; este diretório **não cria
 outra aplicação** e **não publica nem modifica nada por si só**.
@@ -44,12 +49,12 @@ O `AGENTS.md` exige autorização do Supervisor antes de merge/deploy.
 5. Só então iniciar e verificar o serviço. Nunca substituir a base existente
    ou reconfigurar o proxy de outros projetos às cegas.
 
-## Execução em VPS aprovada
+## Alternativa Docker: apenas para servidor dedicado (NÃO a VPS atual)
 
 As linhas seguintes são documentação para a orquestração já autorizada,
 **não comandos executados**.
 
-O runner opera a partir da raiz do repositório:
+Num servidor dedicado separado, o runner opera a partir da raiz do repositório:
 ```sh
 # Recebe as variáveis de um secret manager; não gravar segredos em git.
 docker compose --env-file deploy/staging/.env -f deploy/staging/compose.yml config --quiet
@@ -162,3 +167,19 @@ Não há aprovação de integração/deploy registada em \`AGENTS.md\`, pelo que
 - O \`AGENTS.md\` continua a proibir deploy/release sem autoridade do
   Supervisor. A escolha do hostname e a confirmação do IP pelo Owner não
   substituem essa aprovação.
+
+### Build exato do release, isolado e sem sudo
+
+O ficheiro `deploy/staging/native/build-release.sh` compila a revisão
+indicada pelo Supervisor (SHA completo), sem mudar serviços de terceiros.
+Só pode correr como utilizador do sistema `fadego-staging`, com
+`DATABASE_URL` exclusivo da base `fadego_staging`, e exige o marcador
+`FADEGO_STAGING_SUPERVISOR_APPROVED=1` após a aprovação formal
+no processo existente. Este marcador não substitui a autorização verdadeira.
+
+O script obtém o commit exato, instala as dependências com Corepack/pnpm,
+executa build, aplica migrações apenas na base de staging e troca
+atomicamente o symlink `current`. Não instala pacotes globais, não abre
+portas, não reinicia aplicações e não altera Nginx. Um operador
+autorizado só ativa a unidade systemd e os ficheiros Nginx depois
+de todas as verificações e TLS estarem aprovados.

@@ -155,5 +155,6 @@ jobs:
           FADEGO_STAGING_GATE_HASH: ci_fake_bcrypt_hash_for_config_only
         run: |
           set -euo pipefail
+          bash -n deploy/staging/native/build-release.sh
           docker compose -f deploy/staging/compose.yml --profile dedicated-host config --quiet
           docker build -f deploy/staging/Dockerfile -t fadego-staging:ci .

@@ -20,7 +20,8 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [ ] Advanced staff-restricted agenda and real barbershop workflow tests
 - [ ] API audit, dependency audit, performance, accessibility and stress tests
 - [ ] Operational notifications with opt-out and retry policies
-- [ ] Password recovery and secure initial administrative provisioning
+- [x] One-time guarded SUPER_ADMIN bootstrap tool for a fresh database
+- [ ] Password recovery and approved provisioning/recovery for existing installations
 - [ ] Controlled backups/restores, observability, incident runbook and RGPD
       retention/export/erasure design
 - [ ] Automated multi-tenant end-to-end browser testing and pilot acceptance

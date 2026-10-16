@@ -29,8 +29,13 @@ PostgreSQL 16, NextAuth 4 and Zod. Node.js 22 and pnpm 10.
 4. Run `pnpm prisma migrate deploy`.
 5. Run `pnpm dev`.
 
-There is intentionally no public administrator self-registration. Provision
-administrative identities through an authorized bootstrap procedure.
+There is intentionally no public administrator self-registration. For a fresh,
+empty installation only, provision the first SUPER_ADMIN using
+`pnpm bootstrap:admin` with `FADEGO_BOOTSTRAP_EMAIL`,
+`FADEGO_BOOTSTRAP_PASSWORD` and optional `FADEGO_BOOTSTRAP_NAME` supplied via
+an approved secret manager (never commit credentials). The bootstrap refuses
+to run when any user already exists. Existing installations require a separate
+authorized recovery procedure.
 
 ## Trusted reverse proxy and booking limits
 

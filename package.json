@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "secret:scan": "node scripts/secret-scan.mjs",
+    "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
     "prepare": "prisma generate"
   },
   "pnpm": {

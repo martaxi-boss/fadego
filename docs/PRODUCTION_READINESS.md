@@ -13,8 +13,8 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Read-only super-admin metrics
 - [x] Anti-abuse hardening: explicit proxy trust, phone/source budgets
 - [x] CI includes all development branches and main on push
-- [ ] Dashboard actions for booking completion, no-show, reassignments and
-      staff-restricted views; test against real barbershop workflows
+- [x] Protected booking completion and no-show actions (only after appointment end)
+- [ ] Reassignments, advanced staff-restricted views and real barbershop workflow tests
 - [ ] API audit, dependency audit, performance, accessibility and stress tests
 - [ ] Operational notifications with opt-out and retry policies
 - [ ] Password recovery and secure initial administrative provisioning

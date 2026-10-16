@@ -5,6 +5,7 @@ import {
   BookingEngineError,
   cancelBookingByCustomer,
   cancelBookingByShop,
+  finalizeBookingByShop,
   createBooking,
   reassignBookingToGeneral,
   reassignBookingToStaff,
@@ -157,7 +158,8 @@ const expectBookingCode = async (
     | "OUTSIDE_OPENING_HOURS"
     | "NO_CAPACITY"
     | "BOOKING_UNAVAILABLE"
-    | "INVALID_STATUS",
+    | "INVALID_STATUS"
+    | "OUTCOME_TOO_EARLY",
 ) => {
   await assert.rejects(action, (error: unknown) => {
     assert.ok(error instanceof BookingEngineError)
@@ -869,4 +871,42 @@ test("failed reassignment for lack of capacity leaves NEEDS_REASSIGNMENT unchang
   assert.equal(persisted.status, "NEEDS_REASSIGNMENT")
   assert.equal(persisted.staffMemberId, old.staff.id)
   assert.equal(persisted.chairId, old.chair.id)
+})
+
+test("administrators settle only elapsed confirmed appointments in their own tenant", async () => {
+  const fixture = await createShop("settlement")
+  await createGeneralChair(fixture.shop.id, 1)
+  const completed = await createBooking(bookingInput(fixture, utc(9)))
+  const absent = await createBooking(bookingInput(fixture, utc(10)))
+
+  await expectBookingCode(
+    () => finalizeBookingByShop(fixture.shop.id, completed.id, "COMPLETED", {
+      now: () => utc(9, 15),
+    }),
+    "OUTCOME_TOO_EARLY",
+  )
+  const result = await finalizeBookingByShop(fixture.shop.id, completed.id, "COMPLETED", {
+    now: () => utc(11),
+  })
+  assert.equal(result.status, "COMPLETED")
+
+  const noShow = await finalizeBookingByShop(fixture.shop.id, absent.id, "NO_SHOW", {
+    now: () => utc(11),
+  })
+  assert.equal(noShow.status, "NO_SHOW")
+
+  await expectBookingCode(
+    () => finalizeBookingByShop(fixture.shop.id, completed.id, "NO_SHOW", {
+      now: () => utc(12),
+    }),
+    "INVALID_STATUS",
+  )
+
+  const foreign = await createShop("settlement-foreign")
+  await expectBookingCode(
+    () => finalizeBookingByShop(foreign.shop.id, completed.id, "NO_SHOW", {
+      now: () => utc(12),
+    }),
+    "BOOKING_UNAVAILABLE",
+  )
 })

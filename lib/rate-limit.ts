@@ -15,6 +15,8 @@ export const RATE_LIMITS = {
   publicBookingPhone: { points: 8, duration: 15 * 60 },
   privateBookingLookup: { points: 20, duration: 60 },
   privateBookingMutation: { points: 10, duration: 5 * 60 },
+  privateBookingMutationSource: { points: 30, duration: 5 * 60 },
+  publicAvailabilityRead: { points: 60, duration: 60 },
 } as const
 
 export type RateLimitName = keyof typeof RATE_LIMITS

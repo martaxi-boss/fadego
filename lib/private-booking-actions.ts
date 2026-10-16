@@ -135,6 +135,11 @@ const consumeMutationLimit = async (
 ) => {
   const consume = options.consumeLimit ?? consumeRateLimit
   const sourceIp = options.sourceIp?.trim() || "unknown"
+  const sourceBudget = await consume(
+    "privateBookingMutationSource",
+    hashRateLimitKey("private-booking-mutation-source", sourceIp),
+  )
+  if (!sourceBudget.allowed) return sourceBudget
   return consume(
     "privateBookingMutation",
     buildPrivateMutationRateLimitKey(sourceIp, rawCode),

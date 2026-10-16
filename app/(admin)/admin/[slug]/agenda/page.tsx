@@ -8,7 +8,7 @@ import {
   localAgendaDate,
   resolveAgendaTimezone,
 } from "@/lib/admin-agenda"
-import { cancelTenantBookingAction } from "./actions"
+import { cancelTenantBookingAction, finalizeTenantBookingAction } from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -60,6 +60,7 @@ export default async function AgendaPage({
     select: {
       id: true,
       startsAt: true,
+      endsAt: true,
       status: true,
       serviceNameSnapshot: true,
       serviceDurationMinutes: true,
@@ -86,6 +87,7 @@ export default async function AgendaPage({
   const money = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" })
   const basePath = "/admin/" + access.barbershop.slug + "/agenda"
   const notice = asText(query.notice)
+  const now = new Date()
 
   return (
     <div className="space-y-6">
@@ -148,6 +150,8 @@ export default async function AgendaPage({
       </section>
 
       {notice === "cancelled" ? <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Marcação cancelada.</p> : null}
+      {notice === "finished" ? <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Marcação concluída.</p> : null}
+      {notice === "no-show" ? <p role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Falta registada.</p> : null}
       {notice === "rate-limit" ? <p role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Demasiadas ações. Tenta mais tarde.</p> : null}
       {notice === "unavailable" || notice === "invalid" ? <p role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Não foi possível alterar a marcação.</p> : null}
 
@@ -173,13 +177,27 @@ export default async function AgendaPage({
               </p>
               <p className="text-sm text-gray-500">Contacto: {booking.customerPhoneSnapshot}</p>
             </div>
-            {canManage && (booking.status === "CONFIRMED" || booking.status === "NEEDS_REASSIGNMENT") ? (
-              <form action={cancelTenantBookingAction.bind(null, access.barbershop.slug, booking.id, date)}>
-                <button className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
-                  type="submit" aria-label={"Cancelar marcação de " + booking.customerNameSnapshot}>
-                  Cancelar marcação
-                </button>
-              </form>
+            {canManage ? (
+              <div className="flex flex-wrap gap-2">
+                {(booking.status === "CONFIRMED" || booking.status === "NEEDS_REASSIGNMENT") ? (
+                  <form action={cancelTenantBookingAction.bind(null, access.barbershop.slug, booking.id, date)}>
+                    <button className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50"
+                      type="submit" aria-label={"Cancelar marcação de " + booking.customerNameSnapshot}>
+                      Cancelar
+                    </button>
+                  </form>
+                ) : null}
+                {booking.status === "CONFIRMED" && booking.endsAt <= now ? (
+                  <>
+                    <form action={finalizeTenantBookingAction.bind(null, access.barbershop.slug, booking.id, "COMPLETED", date)}>
+                      <button type="submit" className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-50">Concluir</button>
+                    </form>
+                    <form action={finalizeTenantBookingAction.bind(null, access.barbershop.slug, booking.id, "NO_SHOW", date)}>
+                      <button type="submit" className="rounded-lg border border-amber-200 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-50">Não compareceu</button>
+                    </form>
+                  </>
+                ) : null}
+              </div>
             ) : null}
           </article>
         ))}

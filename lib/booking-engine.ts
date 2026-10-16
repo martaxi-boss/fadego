@@ -18,6 +18,7 @@ export type BookingEngineErrorCode =
   | "BOOKING_UNAVAILABLE"
   | "INVALID_STATUS"
   | "PAST_START"
+  | "OUTCOME_TOO_EARLY"
 
 export class BookingEngineError extends Error {
   constructor(public readonly code: BookingEngineErrorCode) {
@@ -862,5 +863,33 @@ export const reassignBookingToGeneral = async (
         staffNameSnapshot: null,
         chairNumberSnapshot: chair.number,
       },
+    })
+  })
+
+/**
+ * Administrative settlement: never complete an appointment or mark no-show
+ * before the scheduled end, and never revive a terminal booking.
+ * Uses the same tenant advisory lock and row lock as booking mutations.
+ */
+export const finalizeBookingByShop = (
+  barbershopId: string,
+  bookingId: string,
+  outcome: "COMPLETED" | "NO_SHOW",
+  clock: BookingClock = systemBookingClock,
+) =>
+  runBookingMutation(async (tx) => {
+    await acquireTenantBookingLock(tx, barbershopId)
+    const booking = await lockBooking(tx, barbershopId, bookingId)
+    if (booking.status !== "CONFIRMED") {
+      throw new BookingEngineError("INVALID_STATUS")
+    }
+    const now = clock.now()
+    if (!Number.isFinite(now.getTime()) || now < booking.endsAt) {
+      throw new BookingEngineError("OUTCOME_TOO_EARLY")
+    }
+
+    return tx.booking.update({
+      where: { id_barbershopId: { id: bookingId, barbershopId } },
+      data: { status: outcome },
     })
   })

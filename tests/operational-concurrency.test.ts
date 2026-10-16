@@ -270,6 +270,9 @@ test("stale lifecycle writer cannot reactivate or unarchive an already committed
       active: true,
       archived: false,
     })
+    // Register the rejection observer immediately: the writer may reject
+    // before the blocking transaction is released and formally asserted.
+    void staleWriter.catch(() => undefined)
 
     await waitForBlockedQuery(observer, "fadego:staff-lifecycle-lock")
 

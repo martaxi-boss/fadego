@@ -747,7 +747,9 @@ test("Club admin surface is autonomous and reuses canonical privilegedWrite auth
   assert.match(page, /membership\.role === "OWNER"/)
   assert.match(page, /membership\.role === "ADMIN"/)
   assert.match(page, /role STAFF permite consultar/)
-  assert.match(navigation, /\/club/)
+  const modules = readFileSync("lib/admin-navigation.ts", "utf8")
+  assert.match(navigation, /tenantModulesForRole\(membership\.role\)/)
+  assert.match(modules, /href: "club"/)
 })
 
 test("normal Club domain exposes no MembershipPlan hard-delete path", () => {

@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation"
+import { AuthorizationError } from "@/lib/access-policy"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
 import { resolveDirectoryPage } from "@/lib/admin-pagination"
@@ -17,7 +19,13 @@ export default async function CustomersPage({
   const { slug } = await params
   const filters = await searchParams
   // Customer directory is not a general STAFF access surface.
-  const access = await requireBarbershopBySlug(slug, ["OWNER", "ADMIN"])
+  let access
+  try {
+    access = await requireBarbershopBySlug(slug, ["OWNER", "ADMIN"])
+  } catch (error) {
+    if (error instanceof AuthorizationError) notFound()
+    throw error
+  }
   const q = text(filters.q)
   const where = {
     barbershopId: access.barbershop.id,

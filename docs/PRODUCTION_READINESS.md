@@ -27,7 +27,8 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [ ] Production backups/restores, observability, incident runbook and RGPD
       retention/export/erasure design
 - [x] CI production HTTP smoke: homepage, login, unauthenticated admin guard and invalid private access
-- [ ] Automated multi-tenant end-to-end browser testing and pilot acceptance
+- [x] Multi-tenant end-to-end browser isolation for OWNER, STAFF and anonymous booking pages
+- [ ] Pilot acceptance with real authorized barbershops (Human Gate)
 
 ## Human Gate — only external choices or access
 

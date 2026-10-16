@@ -140,7 +140,99 @@ async function main() {
       usageLimitPerCycle: 2,
     },
   })
-  console.log("FADEGO CI showroom seeded: 1 tenant, 6 fake customers, 4 fake bookings.")
+
+  // Second synthetic tenant and a STAFF user exercise real browser access isolation.
+  const staffLogin = await db.user.create({
+    data: {
+      name: "Colaborador Norte — Demonstração",
+      email: "ci-staff-north@fadego.example",
+      passwordHash: await hashPassword(password!),
+      platformRole: "USER",
+      active: true,
+    },
+  })
+  const northShop = await db.barbershop.create({
+    data: {
+      name: "Barbearia Norte — Exemplo",
+      slug: "barbearia-norte-demo",
+      status: "ACTIVE",
+      timezone: "Europe/Lisbon",
+      address: "Morada fictícia do Norte",
+    },
+  })
+  await db.barbershopMember.create({
+    data: { userId: staffLogin.id, barbershopId: northShop.id, role: "STAFF" },
+  })
+  await db.openingHour.createMany({
+    data: Array.from({ length: 7 }, (_, weekday) => ({
+      barbershopId: northShop.id,
+      weekday,
+      isClosed: weekday === 6,
+      opensAt: weekday === 6 ? null : 9 * 60,
+      closesAt: weekday === 6 ? null : 19 * 60,
+    })),
+  })
+  const northChair = await db.chair.create({
+    data: { barbershopId: northShop.id, number: 1, mode: "GENERAL_BOOKING" },
+  })
+  const northService = await db.service.create({
+    data: {
+      barbershopId: northShop.id,
+      name: "Corte Norte — Exemplo",
+      price: "15.00", durationMinutes: 30, active: true,
+    },
+  })
+  const northCustomer = await db.customer.create({
+    data: {
+      barbershopId: northShop.id,
+      name: "Cliente Norte Fictício",
+      phone: "+351 919 999 991",
+      email: "norte@example.test",
+    },
+  })
+  await db.booking.create({
+    data: {
+      barbershopId: northShop.id,
+      customerId: northCustomer.id,
+      serviceId: northService.id,
+      chairId: northChair.id,
+      mode: "GENERAL_BOOKING",
+      startsAt: at(11),
+      endsAt: at(11, 30),
+      status: "CONFIRMED",
+      serviceNameSnapshot: northService.name,
+      serviceDurationMinutes: northService.durationMinutes,
+      servicePriceSnapshot: northService.price,
+      customerNameSnapshot: northCustomer.name,
+      customerPhoneSnapshot: northCustomer.phone,
+      customerEmailSnapshot: northCustomer.email,
+      staffNameSnapshot: null,
+      chairNumberSnapshot: northChair.number,
+    },
+  })
+  const northPlan = await db.membershipPlan.create({
+    data: {
+      barbershopId: northShop.id,
+      name: "Club Norte — Exemplo",
+      price: "25.00",
+      active: true,
+    },
+  })
+  await db.membership.create({
+    data: {
+      barbershopId: northShop.id,
+      customerId: northCustomer.id,
+      membershipPlanId: northPlan.id,
+      status: "ACTIVE",
+      startedAt: new Date("2030-05-01T00:00:00.000Z"),
+      currentCycleStartsAt: new Date("2030-05-01T00:00:00.000Z"),
+      currentCycleEndsAt: new Date("2030-06-01T00:00:00.000Z"),
+      planNameSnapshot: northPlan.name,
+      planPriceSnapshot: northPlan.price,
+    },
+  })
+
+  console.log("FADEGO CI showroom seeded: 2 tenants, 2 demo identities and isolated fake bookings.")
 }
 
 main().catch((e: unknown) => {

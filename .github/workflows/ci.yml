@@ -85,3 +85,8 @@ jobs:
 
       - name: Secret scan
         run: pnpm secret:scan
+
+      - name: Backup/restore rehearsal (ephemeral CI Postgres only)
+        env:
+          CI_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: bash scripts/ci-backup-restore.sh

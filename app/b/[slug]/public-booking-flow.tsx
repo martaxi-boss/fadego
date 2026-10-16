@@ -46,6 +46,7 @@ type BookingResponse =
       ok: true
       accessCode: string
       accessPath: string
+      emailStatus: "accepted" | "pending"
     }
   | {
       ok: false
@@ -56,6 +57,7 @@ type BookingResponse =
         | "STAFF_UNAVAILABLE"
         | "SLOT_UNAVAILABLE"
         | "RATE_LIMITED"
+        | "EMAIL_UNAVAILABLE"
         | "UNAVAILABLE"
     }
 
@@ -202,6 +204,11 @@ export default function PublicBookingFlow({
               "Esse horário acabou de ficar indisponível. Escolhe outro horário.",
             )
           }
+          return
+        }
+
+        if (payload.code === "EMAIL_UNAVAILABLE") {
+          setError("Não é possível enviar o email de confirmação neste momento. Não foi criada nenhuma marcação. Tenta novamente mais tarde.")
           return
         }
 
@@ -482,7 +489,7 @@ export default function PublicBookingFlow({
           </label>
           <label className="block">
             <span className="mb-1 block text-sm text-gray-700">
-              Email <span className="text-gray-400">(opcional)</span>
+              Email <span className="font-semibold text-[#2c7555]">(obrigatório)</span>
             </span>
             <input
               autoComplete="email"
@@ -490,8 +497,14 @@ export default function PublicBookingFlow({
               maxLength={254}
               name="email"
               type="email"
+              required
+              aria-describedby="booking-email-explanation"
             />
           </label>
+          <p id="booking-email-explanation" className="text-xs leading-6 text-gray-600">
+            Vais receber neste email a confirmação, o código e um link privado
+            para consultar, remarcar ou cancelar a reserva, sem criar uma conta.
+          </p>
 
           {error ? (
             <p

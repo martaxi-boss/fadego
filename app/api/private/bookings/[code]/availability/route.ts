@@ -1,5 +1,6 @@
 import { getPrivateRescheduleAvailability } from "@/lib/private-booking-actions"
 import { sourceIpFromHeaders } from "@/lib/request-context"
+import { readBoundedJsonObject } from "@/lib/http-json"
 
 const noStoreHeaders = {
   "Cache-Control": "no-store, max-age=0",
@@ -10,7 +11,14 @@ export async function POST(
   context: { params: Promise<{ code: string }> },
 ) {
   const { code } = await context.params
-  const body = await request.json().catch(() => ({}))
+  const parsedBody = await readBoundedJsonObject(request)
+  if (!parsedBody.ok) {
+    return Response.json({ ok: false, code: "INVALID_INPUT" }, {
+      status: parsedBody.status,
+      headers: noStoreHeaders,
+    })
+  }
+  const body = parsedBody.value
   const result = await getPrivateRescheduleAvailability(
     code,
     typeof body.localDate === "string" ? body.localDate : "",

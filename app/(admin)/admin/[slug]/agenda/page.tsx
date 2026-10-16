@@ -8,7 +8,11 @@ import {
   localAgendaDate,
   resolveAgendaTimezone,
 } from "@/lib/admin-agenda"
-import { cancelTenantBookingAction, finalizeTenantBookingAction } from "./actions"
+import {
+  cancelTenantBookingAction,
+  finalizeTenantBookingAction,
+  reassignTenantBookingAction,
+} from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -55,7 +59,8 @@ export default async function AgendaPage({
   const requestedStatus = asText(query.status)
   const selectedStatus = requestedStatus in statusLabels ? requestedStatus : "ALL"
   const window = agendaUtcSearchWindow(date)
-  const records = await db.booking.findMany({
+  const [records, staff, generalChairCount] = await Promise.all([
+    db.booking.findMany({
     where: { barbershopId: access.barbershop.id, startsAt: window },
     select: {
       id: true,
@@ -72,7 +77,21 @@ export default async function AgendaPage({
     },
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
     take: 2500,
-  })
+    }),
+    db.staffMember.findMany({
+      where: {
+        barbershopId: access.barbershop.id,
+        active: true,
+        archivedAt: null,
+        chairs: { some: { active: true, mode: "STAFF_BOOKING" } },
+      },
+      select: { id: true, name: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    }),
+    db.chair.count({
+      where: { barbershopId: access.barbershop.id, active: true, mode: "GENERAL_BOOKING" },
+    }),
+  ])
   const allDay = records.filter((item) => localAgendaDate(item.startsAt, timeZone) === date)
   const visible = selectedStatus === "ALL"
     ? allDay
@@ -152,6 +171,7 @@ export default async function AgendaPage({
       {notice === "cancelled" ? <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Marcação cancelada.</p> : null}
       {notice === "finished" ? <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Marcação concluída.</p> : null}
       {notice === "no-show" ? <p role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Falta registada.</p> : null}
+      {notice === "reassigned" ? <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Marcação reatribuída.</p> : null}
       {notice === "rate-limit" ? <p role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Demasiadas ações. Tenta mais tarde.</p> : null}
       {notice === "unavailable" || notice === "invalid" ? <p role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Não foi possível alterar a marcação.</p> : null}
 
@@ -185,6 +205,18 @@ export default async function AgendaPage({
                       type="submit" aria-label={"Cancelar marcação de " + booking.customerNameSnapshot}>
                       Cancelar
                     </button>
+                  </form>
+                ) : null}
+                {booking.status === "NEEDS_REASSIGNMENT" && (generalChairCount > 0 || staff.length > 0) ? (
+                  <form action={reassignTenantBookingAction.bind(null, access.barbershop.slug, booking.id, date)}
+                    className="flex flex-wrap items-center gap-2">
+                    <label className="sr-only" htmlFor={"target-" + booking.id}>Novo atendimento</label>
+                    <select id={"target-" + booking.id} name="targetStaffMemberId" required
+                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                      {generalChairCount > 0 ? <option value="">Atendimento geral</option> : null}
+                      {staff.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+                    </select>
+                    <button type="submit" className="rounded-lg bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800">Reatribuir</button>
                   </form>
                 ) : null}
                 {booking.status === "CONFIRMED" && booking.endsAt <= now ? (

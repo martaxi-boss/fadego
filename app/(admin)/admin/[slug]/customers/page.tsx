@@ -15,7 +15,8 @@ export default async function CustomersPage({
 }) {
   const { slug } = await params
   const filters = await searchParams
-  const access = await requireBarbershopBySlug(slug, ["OWNER", "ADMIN", "STAFF"])
+  // Customer directory is not a general STAFF access surface.
+  const access = await requireBarbershopBySlug(slug, ["OWNER", "ADMIN"])
   const q = text(filters.q)
   const where = {
     barbershopId: access.barbershop.id,

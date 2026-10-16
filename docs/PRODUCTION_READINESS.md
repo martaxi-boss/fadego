@@ -15,7 +15,9 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Expiry enforcement for private access codes 30 days after appointment end
 - [x] CI includes all development branches and main on push
 - [x] Protected booking completion and no-show actions (only after appointment end)
-- [ ] Reassignments, advanced staff-restricted views and real barbershop workflow tests
+- [x] Protected reassignments through existing transactional booking engine
+- [x] Customer directory restricted to OWNER/ADMIN
+- [ ] Advanced staff-restricted agenda and real barbershop workflow tests
 - [ ] API audit, dependency audit, performance, accessibility and stress tests
 - [ ] Operational notifications with opt-out and retry policies
 - [ ] Password recovery and secure initial administrative provisioning

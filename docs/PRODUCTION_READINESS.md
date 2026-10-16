@@ -25,6 +25,7 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [ ] Password recovery and approved provisioning/recovery for existing installations
 - [ ] Controlled backups/restores, observability, incident runbook and RGPD
       retention/export/erasure design
+- [x] CI production HTTP smoke: homepage, login, unauthenticated admin guard and invalid private access
 - [ ] Automated multi-tenant end-to-end browser testing and pilot acceptance
 
 ## Human Gate — only external choices or access

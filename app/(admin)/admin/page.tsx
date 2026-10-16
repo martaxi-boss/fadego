@@ -45,8 +45,7 @@ export default async function AdminHomePage() {
       </p>
       <h1 className="mt-3 text-3xl font-semibold">Escolher barbearia</h1>
       <p className="mt-2 text-gray-600">
-        Apenas memberships ativas ligadas à identidade autenticada são
-        apresentadas.
+        Apenas os acessos ativos associados à tua conta são apresentados.
       </p>
 
       <div className="mt-8 grid gap-4">
@@ -60,7 +59,7 @@ export default async function AdminHomePage() {
               <div>
                 <h2 className="font-semibold">{barbershop.name}</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  {barbershop.slug}.fadego.pt
+                  Código: {barbershop.slug} · {barbershop.status}
                 </p>
               </div>
               <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium">

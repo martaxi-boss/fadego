@@ -85,3 +85,23 @@ jobs:
 
       - name: Secret scan
         run: pnpm secret:scan
+
+      - name: Production HTTP smoke
+        run: |
+          set -euo pipefail
+          pnpm start > /tmp/fadego-start.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --output /dev/null http://127.0.0.1:3000/; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            tail -n 100 /tmp/fadego-start.log
+            exit 1
+          fi
+          node scripts/smoke-runtime.mjs

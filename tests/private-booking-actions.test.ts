@@ -1029,3 +1029,44 @@ test("private action routes accept only code plus narrow action input and never 
   assert.match(controls, /SLOT_UNAVAILABLE/)
   assert.match(controls, /router\.refresh\(\)/)
 })
+
+test("expired private booking codes cannot mutate a reservation", async () => {
+  const fixture = await createFixture("expired-private-action")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+
+  const result = await cancelPrivateBooking(created.accessCode, {
+    sourceIp: "198.51.100.60",
+    consumeLimit: allowLimit,
+    now: () => new Date("2030-03-01T00:00:00.000Z"),
+  })
+  assert.deepEqual(result, { ok: false, code: "UNAVAILABLE" })
+  const token = await tokenForCode(created.accessCode)
+  assert.ok(token)
+  assert.equal(token.booking.status, "CONFIRMED")
+})
+
+test("customer actions reject cancellation and reschedule after appointment starts", async () => {
+  const fixture = await createFixture("late-private-actions")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+  const lateOptions = {
+    sourceIp: "198.51.100.63",
+    consumeLimit: allowLimit,
+    now: () => new Date("2030-01-07T09:15:00.000Z"),
+  }
+  assert.deepEqual(await cancelPrivateBooking(created.accessCode, lateOptions), {
+    ok: false,
+    code: "ACTION_UNAVAILABLE",
+  })
+  assert.deepEqual(
+    await reschedulePrivateBooking(created.accessCode, { startsAt: "2030-01-07T11:00:00.000Z" }, lateOptions),
+    { ok: false, code: "ACTION_UNAVAILABLE" },
+  )
+  const token = await tokenForCode(created.accessCode)
+  assert.equal(token?.booking.status, "CONFIRMED")
+})

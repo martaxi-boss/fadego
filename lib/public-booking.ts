@@ -11,6 +11,7 @@ import {
   canonicalizeAccessCode,
   hashAccessCode,
   issueBookingAccessToken,
+  isBookingAccessExpired,
   type AccessCodeGenerator,
   BookingAccessError,
 } from "@/lib/booking-access"
@@ -169,6 +170,7 @@ export type PublicAvailabilityOptions = {
 export type PrivateLookupOptions = {
   sourceIp?: string
   consumeLimit?: RateLimitConsumer
+  now?: () => Date
 }
 
 const safeHttpUrl = (value: string | null) => {
@@ -205,6 +207,21 @@ export const buildPublicCreateRateLimitKey = (
     "public-booking-create",
     barbershopId,
     sourceIp,
+    normalizedPhoneRateSignal(phone),
+  )
+
+export const buildPublicSourceRateLimitKey = (
+  barbershopId: string,
+  sourceIp: string,
+) => hashRateLimitKey("public-booking-source", barbershopId, sourceIp)
+
+export const buildPublicPhoneRateLimitKey = (
+  barbershopId: string,
+  phone: string,
+) =>
+  hashRateLimitKey(
+    "public-booking-phone",
+    barbershopId,
     normalizedPhoneRateSignal(phone),
   )
 
@@ -389,17 +406,19 @@ export const createPublicBooking = async (
 
   const sourceIp = options.sourceIp?.trim() || "unknown"
   const consumeLimit = options.consumeLimit ?? consumeRateLimit
-  const limiter = await consumeLimit(
-    "publicBookingCreate",
-    buildPublicCreateRateLimitKey(
-      tenant.id,
-      sourceIp,
-      parsed.data.customer.phone,
-    ),
-  )
+  // A combined IP+phone budget alone is evadable by rotating either input.
+  const budgets = [
+    ["publicBookingSource", buildPublicSourceRateLimitKey(tenant.id, sourceIp)],
+    ["publicBookingPhone", buildPublicPhoneRateLimitKey(tenant.id, parsed.data.customer.phone)],
+    [
+      "publicBookingCreate",
+      buildPublicCreateRateLimitKey(tenant.id, sourceIp, parsed.data.customer.phone),
+    ],
+  ] as const
 
-  if (!limiter.allowed) {
-    return { ok: false, code: "RATE_LIMITED" }
+  for (const [name, key] of budgets) {
+    const limit = await consumeLimit(name, key)
+    if (!limit.allowed) return { ok: false, code: "RATE_LIMITED" }
   }
 
   try {
@@ -520,6 +539,7 @@ export const lookupPrivateBooking = async (
       booking: {
         select: {
           startsAt: true,
+          endsAt: true,
           status: true,
           serviceNameSnapshot: true,
           serviceDurationMinutes: true,
@@ -530,10 +550,16 @@ export const lookupPrivateBooking = async (
     },
   })
 
-  if (!access || access.revokedAt || !access.barbershop.timezone) {
+  if (
+    !access ||
+    access.revokedAt ||
+    !access.barbershop.timezone ||
+    isBookingAccessExpired(access.booking.endsAt, options.now?.() ?? new Date())
+  ) {
     return { ok: false, code: "UNAVAILABLE" }
   }
 
+  const now = options.now?.() ?? new Date()
   const local = localBookingTime(
     access.booking.startsAt,
     access.barbershop.timezone,
@@ -553,9 +579,11 @@ export const lookupPrivateBooking = async (
       professionalName: access.booking.staffNameSnapshot,
       customerName: access.booking.customerNameSnapshot,
       canCancel:
-        access.booking.status === "CONFIRMED" ||
-        access.booking.status === "NEEDS_REASSIGNMENT",
-      canReschedule: access.booking.status === "CONFIRMED",
+        access.booking.startsAt > now &&
+        (access.booking.status === "CONFIRMED" ||
+          access.booking.status === "NEEDS_REASSIGNMENT"),
+      canReschedule:
+        access.booking.startsAt > now && access.booking.status === "CONFIRMED",
       status: access.booking.status,
     },
   }

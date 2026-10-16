@@ -1,4 +1,6 @@
 import { getPublicAvailability } from "@/lib/public-booking"
+import { sourceIpFromHeaders } from "@/lib/request-context"
+import { consumeRateLimit, hashRateLimitKey } from "@/lib/rate-limit"
 
 const noStoreHeaders = {
   "Cache-Control": "no-store, max-age=0",
@@ -9,6 +11,17 @@ export async function POST(
   context: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await context.params
+  const sourceIp = sourceIpFromHeaders(request.headers)
+  const limit = await consumeRateLimit(
+    "publicAvailabilityRead",
+    hashRateLimitKey("public-availability", slug, sourceIp),
+  )
+  if (!limit.allowed) {
+    return Response.json({ ok: false, code: "UNAVAILABLE" }, {
+      status: 429,
+      headers: noStoreHeaders,
+    })
+  }
   const body = await request.json().catch(() => ({}))
   const result = await getPublicAvailability({
     barbershopSlug: slug,

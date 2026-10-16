@@ -646,7 +646,9 @@ test("new Customer enrollment is atomic and creates no User", async () => {
   const plan = await createPlan(shop.id, {
     services: [{ serviceId: service.id, usageLimitPerCycle: 2 }],
   })
-  const usersBefore = await db.user.count()
+  // Another test file may provision admins concurrently; count only the
+  // enrollment identity instead of all platform users.
+  const usersBefore = await db.user.count({ where: { email: "new@example.test" } })
   const customersBefore = await db.customer.count({
     where: { barbershopId: shop.id },
   })
@@ -666,7 +668,7 @@ test("new Customer enrollment is atomic and creates no User", async () => {
     await db.customer.count({ where: { barbershopId: shop.id } }),
     customersBefore + 1,
   )
-  assert.equal(await db.user.count(), usersBefore)
+  assert.equal(await db.user.count({ where: { email: "new@example.test" } }), usersBefore)
   assert.equal(membership.customer.name, "New Club Customer")
   assert.equal(membership.entitlements.length, 1)
 

@@ -73,3 +73,16 @@ export const issueBookingAccessToken = async (
 
   throw new BookingAccessError("TOKEN_UNAVAILABLE")
 }
+
+/** A private link is a bearer credential; expire it after the appointment. */
+export const BOOKING_ACCESS_GRACE_DAYS = 30
+
+export const isBookingAccessExpired = (
+  bookingEndsAt: Date,
+  now: Date = new Date(),
+) => {
+  const endsAt = bookingEndsAt.getTime()
+  const current = now.getTime()
+  if (!Number.isFinite(endsAt) || !Number.isFinite(current)) return true
+  return current >= endsAt + BOOKING_ACCESS_GRACE_DAYS * 24 * 60 * 60 * 1000
+}

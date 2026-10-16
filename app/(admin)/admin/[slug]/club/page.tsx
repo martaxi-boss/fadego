@@ -58,7 +58,7 @@ export default async function ClubPlansPage({
         <p className="mt-2 text-sm leading-6 text-gray-600">
           Define autonomamente os planos comerciais da barbearia. Cada serviço
           incluído pode ter um limite por ciclo ou utilização ilimitada.
-          Pagamentos e adesões de clientes entram numa fase posterior.
+          As adesões são geridas na secção abaixo. Pagamentos reais ficam desativados até à integração do fornecedor.
         </p>
       </section>
 

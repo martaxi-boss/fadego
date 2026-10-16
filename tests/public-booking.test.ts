@@ -8,6 +8,7 @@ import {
   canonicalizeAccessCode,
   generateAccessCode,
   hashAccessCode,
+  isBookingAccessExpired,
 } from "../lib/booking-access"
 import {
   cancelBookingByCustomer,
@@ -18,6 +19,8 @@ import { db, getPool } from "../lib/prisma"
 import {
   buildPrivateLookupRateLimitKey,
   buildPublicCreateRateLimitKey,
+  buildPublicPhoneRateLimitKey,
+  buildPublicSourceRateLimitKey,
   createPublicBooking,
   getPublicAvailability,
   getPublicCatalog,
@@ -761,10 +764,13 @@ test("public creation rate-limit rejects excessive attempts before Customer crea
   await addGeneralChair(fixture.shop.id)
 
   let attempts = 0
-  const oneAllowed = async (_name: RateLimitName, _key: string) => ({
-    allowed: ++attempts <= 1,
-    retryAfterSeconds: attempts <= 1 ? 0 : 60,
-  })
+  const oneAllowed = async (name: RateLimitName, _key: string) => {
+    if (name === "publicBookingCreate") attempts += 1
+    return {
+      allowed: attempts <= 1,
+      retryAfterSeconds: attempts <= 1 ? 0 : 60,
+    }
+  }
 
   const first = await createPublic(
     fixture,
@@ -819,6 +825,10 @@ test("public limiter keys hash tenant IP and telephone before persistence", asyn
   assert.equal(key.includes(phone), false)
   assert.equal(buildPrivateLookupRateLimitKey(ip).includes(ip), false)
   assert.equal(RATE_LIMITS.publicBookingCreate.points, 6)
+  assert.equal(RATE_LIMITS.publicBookingSource.points, 20)
+  assert.equal(RATE_LIMITS.publicBookingPhone.points, 8)
+  assert.equal(buildPublicSourceRateLimitKey(tenant, ip).includes(ip), false)
+  assert.equal(buildPublicPhoneRateLimitKey(tenant, phone).includes(phone), false)
   assert.equal(RATE_LIMITS.privateBookingLookup.points, 20)
 
   const consumed = await consumeRateLimit("publicBookingCreate", key)
@@ -841,13 +851,32 @@ test("public limiter keys hash tenant IP and telephone before persistence", asyn
   })
 })
 
-test("source IP helper treats forwarding headers only as a bounded anti-abuse signal", () => {
+test("source IP requires explicit trusted-proxy hops and rejects spoofed input", () => {
   const headers = new Headers({
-    "x-forwarded-for": "198.51.100.44, 10.0.0.1",
+    "x-forwarded-for": "192.0.2.99, 198.51.100.44, 10.0.0.1",
     "x-real-ip": "198.51.100.99",
   })
-  assert.equal(sourceIpFromHeaders(headers), "198.51.100.44")
-  assert.equal(sourceIpFromHeaders(new Headers()), "unknown")
+  assert.equal(sourceIpFromHeaders(headers, 0), "unknown")
+  assert.equal(sourceIpFromHeaders(headers, 2), "198.51.100.44")
+  assert.equal(sourceIpFromHeaders(headers, 1), "10.0.0.1")
+  assert.equal(sourceIpFromHeaders(new Headers(), 1), "unknown")
+  assert.equal(sourceIpFromHeaders(headers, -1), "unknown")
+  assert.equal(sourceIpFromHeaders(headers, 1.5), "unknown")
+  assert.equal(sourceIpFromHeaders(new Headers({ "x-real-ip": "203.0.113.6" }), 1), "unknown")
+  assert.equal(sourceIpFromHeaders(new Headers({ "x-forwarded-for": "evil" }), 1), "unknown")
+})
+
+test("independent source and phone budgets reject bookings before side effects", async () => {
+  const fixture = await createFixture("abuse-budgets")
+  await addGeneralChair(fixture.shop.id)
+  for (const deniedName of ["publicBookingSource", "publicBookingPhone"] as const) {
+    const result = await createPublic(fixture, "2030-01-07T09:00:00.000Z", undefined, {
+      consumeLimit: async (name) => ({ allowed: name !== deniedName, retryAfterSeconds: 60 }),
+    })
+    assert.deepEqual(result, { ok: false, code: "RATE_LIMITED" })
+  }
+  assert.equal(await db.customer.count({ where: { barbershopId: fixture.shop.id } }), 0)
+  assert.equal(await db.booking.count({ where: { barbershopId: fixture.shop.id } }), 0)
 })
 
 
@@ -960,4 +989,41 @@ test("public application surfaces wire canonical availability to booking and kee
   )
   assert.equal(privatePage.includes("cancelBookingByCustomer"), false)
   assert.equal(privatePage.includes("rescheduleBooking"), false)
+})
+
+test("private booking access has a bounded post-appointment validity window", async () => {
+  const fixture = await createFixture("access-expiration")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+
+  assert.equal(
+    isBookingAccessExpired(new Date("2030-01-07T09:30:00Z"), new Date("2030-01-10T00:00:00Z")),
+    false,
+  )
+  assert.equal(
+    isBookingAccessExpired(new Date("2030-01-07T09:30:00Z"), new Date("2030-03-01T00:00:00Z")),
+    true,
+  )
+  const expired = await lookup(created.accessCode, {
+    now: () => new Date("2030-03-01T00:00:00Z"),
+  })
+  assert.deepEqual(expired, { ok: false, code: "UNAVAILABLE" })
+})
+
+test("private booking page does not offer actions after appointment start", async () => {
+  const fixture = await createFixture("late-private-view")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+  const result = await lookup(created.accessCode, {
+    now: () => new Date("2030-01-07T09:15:00.000Z"),
+  })
+  assert.equal(result.ok, true)
+  if (result.ok) {
+    assert.equal(result.booking.canCancel, false)
+    assert.equal(result.booking.canReschedule, false)
+  }
 })

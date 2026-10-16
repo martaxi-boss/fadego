@@ -5,6 +5,7 @@ import {
   BookingEngineError,
   cancelBookingByCustomer,
   cancelBookingByShop,
+  finalizeBookingByShop,
   createBooking,
   reassignBookingToGeneral,
   reassignBookingToStaff,
@@ -157,7 +158,9 @@ const expectBookingCode = async (
     | "OUTSIDE_OPENING_HOURS"
     | "NO_CAPACITY"
     | "BOOKING_UNAVAILABLE"
-    | "INVALID_STATUS",
+    | "INVALID_STATUS"
+    | "OUTCOME_TOO_EARLY"
+    | "ACTION_TOO_LATE",
 ) => {
   await assert.rejects(action, (error: unknown) => {
     assert.ok(error instanceof BookingEngineError)
@@ -869,4 +872,64 @@ test("failed reassignment for lack of capacity leaves NEEDS_REASSIGNMENT unchang
   assert.equal(persisted.status, "NEEDS_REASSIGNMENT")
   assert.equal(persisted.staffMemberId, old.staff.id)
   assert.equal(persisted.chairId, old.chair.id)
+})
+
+test("administrators settle only elapsed confirmed appointments in their own tenant", async () => {
+  const fixture = await createShop("settlement")
+  await createGeneralChair(fixture.shop.id, 1)
+  const completed = await createBooking(bookingInput(fixture, utc(9)))
+  const absent = await createBooking(bookingInput(fixture, utc(10)))
+
+  await expectBookingCode(
+    () => finalizeBookingByShop(fixture.shop.id, completed.id, "COMPLETED", {
+      now: () => utc(9, 15),
+    }),
+    "OUTCOME_TOO_EARLY",
+  )
+  const result = await finalizeBookingByShop(fixture.shop.id, completed.id, "COMPLETED", {
+    now: () => utc(11),
+  })
+  assert.equal(result.status, "COMPLETED")
+
+  const noShow = await finalizeBookingByShop(fixture.shop.id, absent.id, "NO_SHOW", {
+    now: () => utc(11),
+  })
+  assert.equal(noShow.status, "NO_SHOW")
+
+  await expectBookingCode(
+    () => finalizeBookingByShop(fixture.shop.id, completed.id, "NO_SHOW", {
+      now: () => utc(12),
+    }),
+    "INVALID_STATUS",
+  )
+
+  const foreign = await createShop("settlement-foreign")
+  await expectBookingCode(
+    () => finalizeBookingByShop(foreign.shop.id, completed.id, "NO_SHOW", {
+      now: () => utc(12),
+    }),
+    "BOOKING_UNAVAILABLE",
+  )
+})
+
+test("customer cannot cancel or reschedule after the original booking start", async () => {
+  const fixture = await createShop("past-customer-mutation")
+  await createGeneralChair(fixture.shop.id, 1)
+  const original = await createBooking(bookingInput(fixture, utc(9)))
+
+  await expectBookingCode(
+    () => cancelBookingByCustomer(fixture.shop.id, original.id, {
+      now: () => utc(9, 15),
+    }),
+    "ACTION_TOO_LATE",
+  )
+  await expectBookingCode(
+    () => rescheduleBooking(fixture.shop.id, original.id, utc(11), {
+      now: () => utc(9, 15),
+    }),
+    "ACTION_TOO_LATE",
+  )
+  const preserved = await db.booking.findUnique({ where: { id: original.id } })
+  assert.equal(preserved?.status, "CONFIRMED")
+  assert.equal(preserved?.startsAt.toISOString(), utc(9).toISOString())
 })

@@ -18,6 +18,8 @@ export type BookingEngineErrorCode =
   | "BOOKING_UNAVAILABLE"
   | "INVALID_STATUS"
   | "PAST_START"
+  | "OUTCOME_TOO_EARLY"
+  | "ACTION_TOO_LATE"
 
 export class BookingEngineError extends Error {
   constructor(public readonly code: BookingEngineErrorCode) {
@@ -667,6 +669,7 @@ const cancelBooking = async (
   barbershopId: string,
   bookingId: string,
   cancellationStatus: "CANCELLED_BY_CUSTOMER" | "CANCELLED_BY_SHOP",
+  clock: BookingClock = systemBookingClock,
 ) =>
   runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
@@ -677,6 +680,11 @@ const cancelBooking = async (
       current.status !== "NEEDS_REASSIGNMENT"
     ) {
       fail("INVALID_STATUS")
+    }
+
+    // Customers must not rewrite history once the appointment has started.
+    if (cancellationStatus === "CANCELLED_BY_CUSTOMER" && current.startsAt <= clock.now()) {
+      fail("ACTION_TOO_LATE")
     }
 
     return tx.booking.update({
@@ -695,7 +703,8 @@ const cancelBooking = async (
 export const cancelBookingByCustomer = (
   barbershopId: string,
   bookingId: string,
-) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_CUSTOMER")
+  clock: BookingClock = systemBookingClock,
+) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_CUSTOMER", clock)
 
 export const cancelBookingByShop = (
   barbershopId: string,
@@ -714,6 +723,9 @@ export const rescheduleBooking = async (
 
     if (current.status !== "CONFIRMED") {
       fail("INVALID_STATUS")
+    }
+    if (current.startsAt <= clock.now()) {
+      fail("ACTION_TOO_LATE")
     }
 
     const tenant = await lockBarbershop(tx, barbershopId)
@@ -862,5 +874,33 @@ export const reassignBookingToGeneral = async (
         staffNameSnapshot: null,
         chairNumberSnapshot: chair.number,
       },
+    })
+  })
+
+/**
+ * Administrative settlement: never complete an appointment or mark no-show
+ * before the scheduled end, and never revive a terminal booking.
+ * Uses the same tenant advisory lock and row lock as booking mutations.
+ */
+export const finalizeBookingByShop = (
+  barbershopId: string,
+  bookingId: string,
+  outcome: "COMPLETED" | "NO_SHOW",
+  clock: BookingClock = systemBookingClock,
+) =>
+  runBookingMutation(async (tx) => {
+    await acquireTenantBookingLock(tx, barbershopId)
+    const booking = await lockBooking(tx, barbershopId, bookingId)
+    if (booking.status !== "CONFIRMED") {
+      throw new BookingEngineError("INVALID_STATUS")
+    }
+    const now = clock.now()
+    if (!Number.isFinite(now.getTime()) || now < booking.endsAt) {
+      throw new BookingEngineError("OUTCOME_TOO_EARLY")
+    }
+
+    return tx.booking.update({
+      where: { id_barbershopId: { id: bookingId, barbershopId } },
+      data: { status: outcome },
     })
   })

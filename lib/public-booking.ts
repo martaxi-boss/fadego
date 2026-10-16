@@ -208,6 +208,21 @@ export const buildPublicCreateRateLimitKey = (
     normalizedPhoneRateSignal(phone),
   )
 
+export const buildPublicSourceRateLimitKey = (
+  barbershopId: string,
+  sourceIp: string,
+) => hashRateLimitKey("public-booking-source", barbershopId, sourceIp)
+
+export const buildPublicPhoneRateLimitKey = (
+  barbershopId: string,
+  phone: string,
+) =>
+  hashRateLimitKey(
+    "public-booking-phone",
+    barbershopId,
+    normalizedPhoneRateSignal(phone),
+  )
+
 export const buildPrivateLookupRateLimitKey = (sourceIp: string) =>
   hashRateLimitKey("private-booking-lookup", sourceIp)
 
@@ -389,17 +404,19 @@ export const createPublicBooking = async (
 
   const sourceIp = options.sourceIp?.trim() || "unknown"
   const consumeLimit = options.consumeLimit ?? consumeRateLimit
-  const limiter = await consumeLimit(
-    "publicBookingCreate",
-    buildPublicCreateRateLimitKey(
-      tenant.id,
-      sourceIp,
-      parsed.data.customer.phone,
-    ),
-  )
+  // A combined IP+phone budget alone is evadable by rotating either input.
+  const budgets = [
+    ["publicBookingSource", buildPublicSourceRateLimitKey(tenant.id, sourceIp)],
+    ["publicBookingPhone", buildPublicPhoneRateLimitKey(tenant.id, parsed.data.customer.phone)],
+    [
+      "publicBookingCreate",
+      buildPublicCreateRateLimitKey(tenant.id, sourceIp, parsed.data.customer.phone),
+    ],
+  ] as const
 
-  if (!limiter.allowed) {
-    return { ok: false, code: "RATE_LIMITED" }
+  for (const [name, key] of budgets) {
+    const limit = await consumeLimit(name, key)
+    if (!limit.allowed) return { ok: false, code: "RATE_LIMITED" }
   }
 
   try {

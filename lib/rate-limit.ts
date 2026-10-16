@@ -11,6 +11,8 @@ export const RATE_LIMITS = {
   authAttempt: { points: 5, duration: 60 },
   privilegedWrite: { points: 30, duration: 60 },
   publicBookingCreate: { points: 6, duration: 5 * 60 },
+  publicBookingSource: { points: 20, duration: 5 * 60 },
+  publicBookingPhone: { points: 8, duration: 15 * 60 },
   privateBookingLookup: { points: 20, duration: 60 },
   privateBookingMutation: { points: 10, duration: 5 * 60 },
 } as const

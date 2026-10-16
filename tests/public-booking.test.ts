@@ -18,6 +18,8 @@ import { db, getPool } from "../lib/prisma"
 import {
   buildPrivateLookupRateLimitKey,
   buildPublicCreateRateLimitKey,
+  buildPublicPhoneRateLimitKey,
+  buildPublicSourceRateLimitKey,
   createPublicBooking,
   getPublicAvailability,
   getPublicCatalog,
@@ -761,10 +763,13 @@ test("public creation rate-limit rejects excessive attempts before Customer crea
   await addGeneralChair(fixture.shop.id)
 
   let attempts = 0
-  const oneAllowed = async (_name: RateLimitName, _key: string) => ({
-    allowed: ++attempts <= 1,
-    retryAfterSeconds: attempts <= 1 ? 0 : 60,
-  })
+  const oneAllowed = async (name: RateLimitName, _key: string) => {
+    if (name === "publicBookingCreate") attempts += 1
+    return {
+      allowed: attempts <= 1,
+      retryAfterSeconds: attempts <= 1 ? 0 : 60,
+    }
+  }
 
   const first = await createPublic(
     fixture,
@@ -819,6 +824,10 @@ test("public limiter keys hash tenant IP and telephone before persistence", asyn
   assert.equal(key.includes(phone), false)
   assert.equal(buildPrivateLookupRateLimitKey(ip).includes(ip), false)
   assert.equal(RATE_LIMITS.publicBookingCreate.points, 6)
+  assert.equal(RATE_LIMITS.publicBookingSource.points, 20)
+  assert.equal(RATE_LIMITS.publicBookingPhone.points, 8)
+  assert.equal(buildPublicSourceRateLimitKey(tenant, ip).includes(ip), false)
+  assert.equal(buildPublicPhoneRateLimitKey(tenant, phone).includes(phone), false)
   assert.equal(RATE_LIMITS.privateBookingLookup.points, 20)
 
   const consumed = await consumeRateLimit("publicBookingCreate", key)
@@ -841,13 +850,32 @@ test("public limiter keys hash tenant IP and telephone before persistence", asyn
   })
 })
 
-test("source IP helper treats forwarding headers only as a bounded anti-abuse signal", () => {
+test("source IP requires explicit trusted-proxy hops and rejects spoofed input", () => {
   const headers = new Headers({
-    "x-forwarded-for": "198.51.100.44, 10.0.0.1",
+    "x-forwarded-for": "192.0.2.99, 198.51.100.44, 10.0.0.1",
     "x-real-ip": "198.51.100.99",
   })
-  assert.equal(sourceIpFromHeaders(headers), "198.51.100.44")
-  assert.equal(sourceIpFromHeaders(new Headers()), "unknown")
+  assert.equal(sourceIpFromHeaders(headers, 0), "unknown")
+  assert.equal(sourceIpFromHeaders(headers, 2), "198.51.100.44")
+  assert.equal(sourceIpFromHeaders(headers, 1), "10.0.0.1")
+  assert.equal(sourceIpFromHeaders(new Headers(), 1), "unknown")
+  assert.equal(sourceIpFromHeaders(headers, -1), "unknown")
+  assert.equal(sourceIpFromHeaders(headers, 1.5), "unknown")
+  assert.equal(sourceIpFromHeaders(new Headers({ "x-real-ip": "203.0.113.6" }), 1), "unknown")
+  assert.equal(sourceIpFromHeaders(new Headers({ "x-forwarded-for": "evil" }), 1), "unknown")
+})
+
+test("independent source and phone budgets reject bookings before side effects", async () => {
+  const fixture = await createFixture("abuse-budgets")
+  await addGeneralChair(fixture.shop.id)
+  for (const deniedName of ["publicBookingSource", "publicBookingPhone"] as const) {
+    const result = await createPublic(fixture, "2030-01-07T09:00:00.000Z", undefined, {
+      consumeLimit: async (name) => ({ allowed: name !== deniedName, retryAfterSeconds: 60 }),
+    })
+    assert.deepEqual(result, { ok: false, code: "RATE_LIMITED" })
+  }
+  assert.equal(await db.customer.count({ where: { barbershopId: fixture.shop.id } }), 0)
+  assert.equal(await db.booking.count({ where: { barbershopId: fixture.shop.id } }), 0)
 })
 
 

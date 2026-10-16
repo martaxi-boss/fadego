@@ -1,0 +1,19 @@
+# Enable only after the FADEGO Supervisor approves staging mail.
+[Unit]
+Description=FADEGO transactional booking-email outbox
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=fadego-staging
+Group=fadego-staging
+WorkingDirectory=/srv/fadego-staging/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/fadego-staging/app.env
+ExecStart=/usr/bin/node /srv/fadego-staging/current/node_modules/tsx/dist/cli.mjs scripts/process-booking-emails.ts
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+UMask=0027

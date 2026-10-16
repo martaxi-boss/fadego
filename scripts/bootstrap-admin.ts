@@ -17,7 +17,10 @@ const run = async () => {
   const passwordHash = await hashPassword(config.data.password)
   const identity = await db.$transaction(async (tx) => {
     // Serialize initial provisioning across simultaneous bootstrap attempts.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(7600123456123::bigint)`
+    await tx.$queryRaw<{ locked: number }[]>`
+      SELECT 1::int AS "locked"
+      FROM pg_advisory_xact_lock(7600123456123::bigint)
+    `
     const count = await tx.user.count()
     if (count !== 0) {
       throw new Error("Bootstrap refused: users already exist. Use the authorized account recovery process.")

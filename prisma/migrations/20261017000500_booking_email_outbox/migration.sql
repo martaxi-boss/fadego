@@ -14,7 +14,7 @@ CREATE TABLE "BookingEmailOutbox" (
     CONSTRAINT "BookingEmailOutbox_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "BookingEmailOutbox_bookingId_key" ON "BookingEmailOutbox"("bookingId");
+CREATE UNIQUE INDEX "BookingEmailOutbox_bookingId_barbershopId_key" ON "BookingEmailOutbox"("bookingId", "barbershopId");
 CREATE INDEX "BookingEmailOutbox_barbershopId_bookingId_idx" ON "BookingEmailOutbox"("barbershopId", "bookingId");
 CREATE INDEX "BookingEmailOutbox_acceptedAt_nextAttemptAt_idx" ON "BookingEmailOutbox"("acceptedAt", "nextAttemptAt");
 CREATE INDEX "BookingEmailOutbox_leaseUntil_idx" ON "BookingEmailOutbox"("leaseUntil");

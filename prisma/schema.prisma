@@ -280,7 +280,7 @@ model BookingAccessToken {
 model BookingEmailOutbox {
   id               String    @id @default(uuid())
   barbershopId     String
-  bookingId        String    @unique
+  bookingId        String
   sealedPayload    String    @db.Text
   attemptCount     Int       @default(0)
   nextAttemptAt    DateTime  @default(now()) @db.Timestamptz(3)
@@ -291,6 +291,7 @@ model BookingEmailOutbox {
 
   booking Booking @relation(fields: [bookingId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
 
+  @@unique([bookingId, barbershopId])
   @@index([barbershopId, bookingId])
   @@index([acceptedAt, nextAttemptAt])
   @@index([leaseUntil])

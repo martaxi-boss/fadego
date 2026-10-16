@@ -54,7 +54,7 @@ if [[ "$actual" != "$sha" ]]; then
 fi
 
 cd "$release"
-corepack pnpm install --frozen-lockfile
+corepack pnpm install --frozen-lockfile --prod=false
 corepack pnpm build
 mkdir -p .next/cache
 

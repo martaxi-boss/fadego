@@ -136,6 +136,7 @@ jobs:
           fi
           node scripts/ci-capture-ux.cjs
           node scripts/ci-e2e-multitenant.cjs
+          node scripts/check-staging-host.mjs
 
       - name: Upload visual demo gallery
         if: github.event_name == 'pull_request' && github.head_ref == 'integration/20261016-fadego-candidate'

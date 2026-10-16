@@ -12,7 +12,15 @@ export type BookingEmailTransport = (
   idempotencyKey: string,
 ) => Promise<boolean>
 
-export const bookingEmailProviderReady = (env: NodeJS.ProcessEnv = process.env) => {
+type BookingEmailEnvironment = {
+  BOOKING_EMAIL_PROVIDER?: string
+  BOOKING_EMAIL_FROM?: string
+  BOOKING_EMAIL_API_KEY?: string
+  NEXTAUTH_SECRET?: string
+  NEXTAUTH_URL?: string
+}
+
+export const bookingEmailProviderReady = (env: BookingEmailEnvironment = process.env) => {
   const from = env.BOOKING_EMAIL_FROM?.trim() || ""
   const origin = env.NEXTAUTH_URL?.trim() || ""
   const key = env.BOOKING_EMAIL_API_KEY || ""

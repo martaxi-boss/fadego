@@ -429,6 +429,10 @@ export const createPublicBooking = async (
         throw new BookingEngineError("TENANT_UNAVAILABLE")
       }
 
+      if (!authoritativeTenant.timezone) {
+        throw new BookingEngineError("TIMEZONE_UNAVAILABLE")
+      }
+
       const customer = await createCustomer(
         tx,
         authoritativeTenant.id,

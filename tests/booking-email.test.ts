@@ -56,7 +56,7 @@ test("booking email provider fails closed before activation and rejects HTTP or 
     BOOKING_EMAIL_API_KEY: "re_test_only_not_real",
     NEXTAUTH_SECRET: secret,
     NEXTAUTH_URL: "https://fadego.duckdns.org",
-  } as NodeJS.ProcessEnv
+  }
   assert.equal(bookingEmailProviderReady({}), false)
   assert.equal(bookingEmailProviderReady(configured), true)
   assert.equal(bookingEmailProviderReady({ ...configured, NEXTAUTH_URL: "http://fadego.duckdns.org" }), false)

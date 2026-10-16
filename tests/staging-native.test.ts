@@ -68,7 +68,7 @@ test("the external HTTPS test fails closed for an exposed or unidentified site",
   assert.match(script, /x-robots-tag/)
   assert.match(script, /rejected\.status, 401/)
   assert.match(script, /loginTarget\.pathname, "\/login"/)
-  assert.match(script, /"STAGING_GATE_PASSWORD"/)
+  assert.match(script, /process\.env\.STAGING_GATE_PASSWORD/)
   assert.match(script, /redirect: "manual"/)
 })
 

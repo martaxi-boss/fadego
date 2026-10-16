@@ -42,8 +42,8 @@ export default function AdminShell({
           <SignOutButton />
         </div>
       </header>
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-7 lg:grid-cols-[235px_minmax(0,1fr)] lg:gap-8 lg:py-8">
-        <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 px-4 py-6 sm:px-7 lg:grid-cols-[235px_minmax(0,1fr)] lg:gap-8 lg:py-8">
+        <aside className="min-w-0 h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="px-3 py-2 text-sm font-bold text-slate-900">{heading}</p>
           <AdminNavigation items={items} homeHref={homeHref} />
         </aside>

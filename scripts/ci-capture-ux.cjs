@@ -14,6 +14,13 @@ async function capture(page, path, file, label) {
   }
   await page.locator("main").first().waitFor({ state: "visible", timeout: 20000 })
   await page.evaluate(() => document.fonts.ready)
+  const width = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    content: document.documentElement.scrollWidth,
+  }))
+  if (width.content > width.viewport + 2) {
+    throw new Error("Horizontal overflow on " + path + ": " + width.content + "px content for " + width.viewport + "px viewport")
+  }
   await page.screenshot({
     path: join(folder, file),
     type: "jpeg", quality: 82, fullPage: true, animations: "disabled",

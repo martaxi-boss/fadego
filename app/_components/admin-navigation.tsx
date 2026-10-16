@@ -15,7 +15,7 @@ export default function AdminNavigation({
   const pathname = usePathname()
 
   return (
-    <nav aria-label="Navegação administrativa" className="mt-2 flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
+    <nav aria-label="Navegação administrativa" className="mt-2 flex w-full min-w-0 max-w-full gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
       {items.map((item) => {
         const active =
           pathname === item.href ||

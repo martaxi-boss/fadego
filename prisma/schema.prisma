@@ -243,12 +243,12 @@ model Booking {
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
-  barbershop   Barbershop           @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  customer     Customer             @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  service      Service              @relation("BookingService", fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  chair        Chair                @relation("BookingChair", fields: [chairId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  staffMember  StaffMember?         @relation("BookingStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  accessTokens BookingAccessToken[]
+  barbershop         Barbershop           @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  customer           Customer             @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  service            Service              @relation("BookingService", fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  chair              Chair                @relation("BookingChair", fields: [chairId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  staffMember        StaffMember?         @relation("BookingStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  accessTokens       BookingAccessToken[]
   bookingEmailOutbox BookingEmailOutbox?
 
   @@unique([id, barbershopId])
@@ -278,16 +278,16 @@ model BookingAccessToken {
 // encrypted with an application-managed key derived from NEXTAUTH_SECRET.
 // Never store bearer credentials in plaintext email queues or log payloads.
 model BookingEmailOutbox {
-  id               String    @id @default(uuid())
-  barbershopId     String
-  bookingId        String
-  sealedPayload    String    @db.Text
-  attemptCount     Int       @default(0)
-  nextAttemptAt    DateTime  @default(now()) @db.Timestamptz(3)
-  leaseUntil       DateTime? @db.Timestamptz(3)
-  acceptedAt       DateTime? @db.Timestamptz(3)
-  lastErrorCode    String?   @db.VarChar(32)
-  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  id            String    @id @default(uuid())
+  barbershopId  String
+  bookingId     String
+  sealedPayload String    @db.Text
+  attemptCount  Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @db.Timestamptz(3)
+  leaseUntil    DateTime? @db.Timestamptz(3)
+  acceptedAt    DateTime? @db.Timestamptz(3)
+  lastErrorCode String?   @db.VarChar(32)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
 
   booking Booking @relation(fields: [bookingId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
 

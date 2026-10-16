@@ -49,6 +49,29 @@ test("native release builder remains strictly staging-only and unprivileged", ()
   assert.doesNotMatch(script, /\bsudo\b|\bsystemctl\b|\bdocker\b/)
 })
 
+test("a failed native build cleans only its own incomplete release", () => {
+  const script = readFileSync("deploy/staging/native/build-release.sh", "utf8")
+  assert.match(script, /release_owned=1/)
+  assert.match(script, /trap cleanup_partial_release EXIT/)
+  assert.match(script, /STAGING_PARTIAL_RELEASE_CLEANED/)
+  assert.match(script, /STAGING_REFUSED_CURRENT_OUTSIDE_OWN_RELEASES/)
+  assert.match(script, /STAGING_REFUSED_PENDING_CURRENT_SYMLINK/)
+  assert.match(script, /release_owned=0/)
+  assert.match(script, /mv -Tf "\$root\/current\.next" "\$root\/current"/)
+  assert.doesNotMatch(script, /rm -rf -- "\$root\/current"/)
+})
+
+test("the external HTTPS test fails closed for an exposed or unidentified site", () => {
+  const script = readFileSync("scripts/smoke-staging.mjs", "utf8")
+  assert.match(script, /closedGate\.status, 401/)
+  assert.match(script, /www-authenticate/)
+  assert.match(script, /x-robots-tag/)
+  assert.match(script, /rejected\.status, 401/)
+  assert.match(script, /loginTarget\.pathname, "\/login"/)
+  assert.match(script, /"STAGING_GATE_PASSWORD"/)
+  assert.match(script, /redirect: "manual"/)
+})
+
 test("native deployment requires prior approval and must not install Docker", () => {
   assert.match(guide, /sem autoridade do\s+Supervisor/)
   assert.match(guide, /NÃO instalar o gateway Caddy/)

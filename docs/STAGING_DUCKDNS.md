@@ -82,7 +82,11 @@ password de administração da produção. Dados de testes apenas sintéticos.
 Depois de HTTPS/Basic Auth estarem operacionais, a automação autorizada
 executa `node scripts/smoke-staging.mjs` com `STAGING_GATE_USER` e
 `STAGING_GATE_PASSWORD` lidos exclusivamente do cofre. Sem credenciais,
-o teste distingue um HTTP 401 do portão de testes de uma falha de rede.
+o teste verifica apenas que existe HTTPS válido, desafio **HTTP Basic**
+e cabeçalho `noindex`; **não certifica a aplicação**. Com credenciais,
+o teste recusa porta/site inesperado, passwords incorretas, ausência
+de proteção, indexação pública, perda de privacidade no Referer e acesso
+não autenticado ao admin. O script é estritamente só de leitura.
 
 A verificação deve demonstrar: certificado TLS válido, resposta HTTP
 controlada, branding FADEGO, `noindex`, rota de login protegida,
@@ -186,3 +190,20 @@ atomicamente o symlink `current`. Não instala pacotes globais, não abre
 portas, não reinicia aplicações e não altera Nginx. Um operador
 autorizado só ativa a unidade systemd e os ficheiros Nginx depois
 de todas as verificações e TLS estarem aprovados.
+
+
+### Segurança na preparação e reversão de releases
+
+- O script nativo verifica que `/srv/fadego-staging/releases` não é um
+  symlink, que `current` não aponta para outro projeto e que não existe
+  uma troca pendente. Um release incompleto da **sua própria** tentativa é
+  apagado apenas em caso de falha. A revisão ativa anterior permanece.
+- `prisma migrate deploy` pode alterar a estrutura da base de staging.
+  **Reverter o symlink não reverte migrações PostgreSQL**: antes de um
+  upgrade, fazer backup da base isolada e garantir compatibilidade das
+  migrações ou uma reposição isolada aprovada. Nunca recorrer a um
+  `migrate reset` ou `db push --force-reset` em dados reais.
+- A troca do symlink `current` não reinicia o serviço. Só o operador
+  autorizado reinicia **apenas** `fadego-staging.service` depois do teste.
+  Se o serviço falhar, regressar ao symlink da revisão anterior e
+  verificar a compatibilidade da base antes de retomar.

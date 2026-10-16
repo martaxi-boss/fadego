@@ -35,10 +35,51 @@ root="/srv/fadego-staging"
 release="$root/releases/$sha"
 test -d "$root/releases" || { echo "STAGING_REFUSED_MISSING_RELEASES_DIRECTORY" >&2; exit 2; }
 test -w "$root/releases" || { echo "STAGING_REFUSED_RELEASES_NOT_WRITABLE" >&2; exit 2; }
-if [[ -e "$release" ]]; then
+if [[ -L "$root" || -L "$root/releases" ]]; then
+  echo "STAGING_REFUSED_SYMLINK_IN_RELEASE_ROOT" >&2
+  exit 2
+fi
+if [[ -e "$root/current" && ! -L "$root/current" ]]; then
+  echo "STAGING_REFUSED_NON_SYMLINK_CURRENT" >&2
+  exit 2
+fi
+if [[ -L "$root/current" ]]; then
+  current_target="$(readlink -f "$root/current" || true)"
+  if [[ "$current_target" != "$root/releases/"* ]]; then
+    echo "STAGING_REFUSED_CURRENT_OUTSIDE_OWN_RELEASES" >&2
+    exit 2
+  fi
+fi
+if [[ -e "$root/current.next" || -L "$root/current.next" ]]; then
+  echo "STAGING_REFUSED_PENDING_CURRENT_SYMLINK" >&2
+  exit 2
+fi
+if [[ -e "$release" || -L "$release" ]]; then
   echo "STAGING_REFUSED_RELEASE_ALREADY_EXISTS" >&2
   exit 2
 fi
+
+# On failure remove only THIS invocation's incomplete, immutable-SHA
+# release. Never remove the old live release, current symlink or database.
+# This cleanup also allows a safe retry after a build/migration failure.
+release_owned=1
+pending_link_owned=0
+cleanup_partial_release() {
+  local result=$?
+  trap - EXIT
+  if [[ "$result" != 0 && "$release_owned" == 1 ]]; then
+    if [[ "$pending_link_owned" == 1 && -L "$root/current.next" ]]; then
+      rm -f -- "$root/current.next"
+    fi
+    if [[ "$release" == "$root/releases/$sha" && -d "$release" && ! -L "$release" ]]; then
+      rm -rf -- "$release"
+      echo "STAGING_PARTIAL_RELEASE_CLEANED" >&2
+    fi
+  fi
+  exit "$result"
+}
+trap cleanup_partial_release EXIT
+
 command -v node >/dev/null
 command -v corepack >/dev/null
 command -v git >/dev/null
@@ -62,6 +103,9 @@ mkdir -p .next/cache
 corepack pnpm prisma migrate deploy
 
 ln -s "$release" "$root/current.next"
+pending_link_owned=1
 mv -Tf "$root/current.next" "$root/current"
+release_owned=0
+pending_link_owned=0
 printf 'FADEGO_STAGING_RELEASE_PREPARED=%s\n' "$sha"
 echo "SERVICE_NOT_RESTARTED_AND_NGINX_NOT_CHANGED"

@@ -110,6 +110,33 @@ async function main() {
       },
     })
   }
+  // Historic fixtures allow actual owner-side completion and no-show flows
+  // without depending on the wall clock or touching real appointments.
+  for (const [index, hour] of [9, 10].entries()) {
+    const customer = customers[4 + index]
+    await db.booking.create({
+      data: {
+        barbershopId: shop.id,
+        customerId: customer.id,
+        serviceId: services[0].id,
+        chairId: chairs[0].id,
+        staffMemberId: staffA.id,
+        mode: "STAFF_BOOKING",
+        startsAt: new Date(Date.UTC(2025, 4, 20, hour)),
+        endsAt: new Date(Date.UTC(2025, 4, 20, hour, 30)),
+        status: "CONFIRMED",
+        serviceNameSnapshot: services[0].name,
+        serviceDurationMinutes: services[0].durationMinutes,
+        servicePriceSnapshot: services[0].price,
+        customerNameSnapshot: customer.name,
+        customerPhoneSnapshot: customer.phone,
+        customerEmailSnapshot: customer.email,
+        staffNameSnapshot: staffA.name,
+        chairNumberSnapshot: chairs[0].number,
+      },
+    })
+  }
+
   const plan = await db.membershipPlan.create({
     data: {
       barbershopId: shop.id,

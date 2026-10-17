@@ -64,6 +64,49 @@ async function main() {
     const ownerCustomers = await owner.locator("main").innerText()
     assert.match(ownerCustomers, /João de Exemplo/)
     assert.ok(!ownerCustomers.includes(privateCustomer), "Cross-tenant customer leaked to OWNER")
+    // Owner-facing barbershop rehearsal, performed only on disposable CI data.
+    await open(owner, "/admin/" + shopA + "/agenda?date=2030-05-20&status=NEEDS_REASSIGNMENT")
+    const filteredAgenda = await owner.locator("main").innerText()
+    assert.match(filteredAgenda, /André Demonstração/, "Owner must find reassignments")
+    assert.ok(!filteredAgenda.includes("João de Exemplo"), "Status filter must hide other bookings")
+    await owner.locator("article").filter({ hasText: "André Demonstração" })
+      .getByRole("button", { name: "Reatribuir" }).click()
+    await owner.waitForURL((url) => url.searchParams.get("notice") === "reassigned", { timeout: 20000 })
+    await owner.getByRole("status").filter({ hasText: "Marcação reatribuída." }).waitFor()
+    const reassigned = await owner.locator("article").filter({ hasText: "André Demonstração" }).innerText()
+    assert.match(reassigned, /Confirmada/, "Owner reassign must confirm the booking")
+    assert.match(reassigned, /Atendimento geral/, "Owner reassign must use the free general chair")
+
+    await open(owner, "/admin/" + shopA + "/agenda?date=2030-05-20")
+    await owner.getByRole("button", { name: "Cancelar marcação de João de Exemplo" }).click()
+    await owner.waitForURL((url) => url.searchParams.get("notice") === "cancelled", { timeout: 20000 })
+    await owner.getByRole("status").filter({ hasText: "Marcação cancelada." }).waitFor()
+    const cancelled = await owner.locator("article").filter({ hasText: "João de Exemplo" }).innerText()
+    assert.match(cancelled, /Cancelada pela barbearia/, "Owner cancellation must be persisted")
+
+    await open(owner, "/admin/" + shopA + "/agenda?date=2025-05-20")
+    const completedFixture = owner.locator("article").filter({ hasText: "Rui Demonstrativo" })
+    await completedFixture.getByRole("button", { name: "Concluir" }).click()
+    await owner.waitForURL((url) => url.searchParams.get("notice") === "finished", { timeout: 20000 })
+    await owner.getByRole("status").filter({ hasText: "Marcação concluída." }).waitFor()
+    assert.match(
+      await owner.locator("article").filter({ hasText: "Rui Demonstrativo" }).innerText(),
+      /Concluída/,
+      "Owner completion must persist",
+    )
+    await owner.locator("article").filter({ hasText: "Carlos de Teste" })
+      .getByRole("button", { name: "Não compareceu" }).click()
+    await owner.waitForURL((url) => url.searchParams.get("notice") === "no-show", { timeout: 20000 })
+    await owner.getByRole("status").filter({ hasText: "Falta registada." }).waitFor()
+    assert.match(
+      await owner.locator("article").filter({ hasText: "Carlos de Teste" }).innerText(),
+      /Falta/,
+      "Owner no-show must persist",
+    )
+    assert.equal(await owner.locator("article").filter({ hasText: "Carlos de Teste" })
+      .getByRole("button", { name: "Não compareceu" }).count(), 0,
+    "Finalized booking must not show a second no-show action")
+
     await open(owner, "/admin/" + shopB)
     assert.equal(route(owner), "/admin", "Owner of tenant A must not open tenant B")
     await assertNoPrivateCustomer(owner, "Owner on unauthorized tenant")
@@ -81,6 +124,12 @@ async function main() {
     const staffAgenda = await staff.locator("main").innerText()
     assert.match(staffAgenda, /Cliente Norte Fictício/)
     assert.ok(!staffAgenda.includes(privatePhone), "STAFF agenda must redact phone")
+    for (const action of ["Reatribuir", "Concluir", "Não compareceu"]) {
+      assert.equal(await staff.getByRole("button", { name: action, exact: true }).count(), 0,
+        "STAFF must not receive privileged agenda action: " + action)
+    }
+    assert.equal(await staff.getByRole("button", { name: /Cancelar marcação de/ }).count(), 0,
+      "STAFF must not receive cancellation actions")
 
     await open(staff, "/admin/" + shopB + "/club")
     const staffClub = await staff.locator("main").innerText()
@@ -96,7 +145,7 @@ async function main() {
     await assertNoPrivateCustomer(staff, "STAFF unauthorized tenant")
     await staffContext.close()
 
-    console.log("FADEGO E2E tenant isolation PASS: public booking, OWNER, STAFF, cross-tenant and redaction.")
+    console.log("FADEGO E2E tenant isolation PASS: OWNER agenda workflow (reassign, cancel, complete, no-show), STAFF restrictions, public booking and cross-tenant redaction.")
   } finally {
     await browser.close()
   }

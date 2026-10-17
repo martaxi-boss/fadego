@@ -18,7 +18,8 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Protected booking completion and no-show actions (only after appointment end)
 - [x] Protected reassignments through existing transactional booking engine
 - [x] Customer directory restricted to OWNER/ADMIN
-- [ ] Advanced staff-restricted agenda and real barbershop workflow tests
+- [x] CI browser rehearsal with synthetic barbershop workflow: OWNER reassign/cancel/complete/no-show; STAFF read-only agenda with contacts masked, cross-tenant denied
+- [ ] Per-professional STAFF agenda restriction (requires an approved link between login identity and operational StaffMember)
 - [ ] API audit, dependency audit, performance, accessibility and stress tests
 - [x] Public booking requires customer email; encrypted confirmation outbox with automatic retries (code/CI)
 - [ ] Provider-approved real email sender, domain verification, live delivery proof, and opt-out policies for other notifications

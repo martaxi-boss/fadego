@@ -29,6 +29,9 @@ assert.equal(db.pathname, "/fadego_staging")
 assert.equal(process.env.NEXTAUTH_URL, "https://fadego.duckdns.org")
 assert.ok((process.env.NEXTAUTH_SECRET ?? "").length >= 32)
 assert.equal(process.env.FADEGO_TRUST_PROXY_HOPS, "0")
+// Initial pilot must never enable a sender before isolated HTTPS + owner consent.
+assert.equal(process.env.BOOKING_EMAIL_PROVIDER, "disabled", "STAGING_REFUSED_LIVE_EMAIL_PROVIDER")
+assert.equal(process.env.GMAIL_LIVE_SEND_ENABLED, "false", "STAGING_REFUSED_LIVE_GMAIL_SEND")
 CHECK_ENV
 
 root="/srv/fadego-staging"

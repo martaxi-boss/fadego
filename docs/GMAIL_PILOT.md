@@ -44,14 +44,13 @@ da barbearia no ecrã de consentimento da Google**, mas não é um contacto
 exposto no catálogo público de reservas e nunca é usado como remetente
 das mensagens de outra barbearia.
 
-O código contém dois transportes separados: Gmail autorizado por tenant e
-remetente sob domínio FADEGO verificado (provider transacional). **Hoje a
-variável global `BOOKING_EMAIL_PROVIDER` seleciona apenas um transporte de
-cada vez**; a escolha simultânea por barbearia, a compra/validação do domínio,
-o serviço de envio e o DNS continuam pendentes de autorização e implementação.
-Um subdomínio não oferece automaticamente uma caixa de correio.
-Enquanto isso, a interface mostra ambas as possibilidades sem as apresentar
-como serviços ativos e as portas de envio continuam fechadas por defeito.
+O código conserva internamente dois transportes históricos, mas **o painel
+do piloto mostra apenas Gmail próprio por barbearia**; o transporte
+transacional do domínio está inativo e reservado para uma decisão
+futura do Owner. `BOOKING_EMAIL_PROVIDER` é global e permanece
+`disabled` no primeiro arranque, tal como
+`GMAIL_LIVE_SEND_ENABLED=false`. Um subdomínio não cria uma caixa
+de correio nem é necessário pagar um email separado por barbearia.
 
 ## Preparação do piloto Gmail sem domínio comercial
 
@@ -128,3 +127,14 @@ mais tarde, a migração será tratada separadamente sem recomeçar o OAuth.
 Para utilização por parceiros fora dos testadores, a publicação e
 verificação da aplicação OAuth Google ainda são necessárias.
 Os envios reais continuam fechados em desenvolvimento.
+
+## Segurança do primeiro build no staging
+
+O modelo `deploy/staging/native/runtime.env.example` contém só
+credenciais não Google e os dois bloqueios de envio desligado.
+O script `build-release.sh` agora **recusa preparar um release**
+se `BOOKING_EMAIL_PROVIDER` não for exatamente `disabled` ou se
+`GMAIL_LIVE_SEND_ENABLED` não for exatamente `false`.
+A regra não substitui autorização do Supervisor. Depois da
+primeira demonstração e de consentimento Google válido, o envio
+de um teste requer uma transição operacional aprovada separadamente.

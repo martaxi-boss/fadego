@@ -23,8 +23,8 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Basic browser accessibility smoke: Portuguese document language, visible form-control names, image alt attributes on booking/login/recovery/OWNER/STAFF views (not a full WCAG audit)
 - [ ] Full API/dependency audit, performance, WCAG accessibility audit and load/stress certification
 - [x] Public booking requires customer email; encrypted confirmation outbox with automatic retries (code/CI)
-- [x] Tenant-specific contact mailbox plus self-service sender prefix under a FADEGO verified domain; OWNER/ADMIN edit, branded From and tenant Reply-To; CI-only (no real send)
-- [ ] Provider-approved real email sender, Google OAuth test credentials, consent, live delivery proof, and opt-out policies for other notifications
+- [x] Gmail-only owner/admin panel, per-tenant send-only OAuth and optional Reply-To; legacy verified-domain sender alias kept internally (not offered in pilot); CI-only, no real send
+- [ ] Validate real Google OAuth vault and HTTPS staging; obtain Owner consent, Supervisor approval and a single permitted delivery test; define opt-out rules only for non-transactional notifications
 - [x] Encrypted email events for customer cancellations and reschedules with same-transaction outbox and idempotent retries (code/CI)
 - [x] Expiring one-use customer booking-access recovery by verified email, phone and local date (code/CI)
 - [ ] More optional operational/marketing notifications, sender consent and approved policies
@@ -45,7 +45,7 @@ This is a development readiness plan, **not proof of an active deployment**.
    forwarding configuration before setting FADEGO_TRUST_PROXY_HOPS > 0.
 3. **Payment processor**: merchant/platform accounts, live credentials,
    legal onboarding, payment terms, refunds and financial approvals.
-4. **Messaging**: choose/approve SMS, email, WhatsApp senders and usage costs.
+4. **Messaging**: Gmail is the only approved integration direction for partner barbershops; approve Google OAuth publication/verification and explicit test sends before commercial use. SMS/WhatsApp remain out of scope.
 5. **Real data and legal**: controller/processor terms, privacy policy,
    retention schedule and first pilot barbershop authorization.
 6. **Commercial go-live**: final permission to publish and collect live
@@ -70,26 +70,36 @@ deployment exists without verifying it.
 
 - [x] Gmail OAuth send-only pilot integration coded: per-tenant one-time state and PKCE, encrypted refresh token, confirmed Google identity and separate explicit send gate (code/CI only; no real consent/send)
 
-## Contact email for each barbershop
+## Gmail exclusivo e email de resposta da barbearia
 
-Each tenant may configure `Barbershop.contactEmail` in `/admin/{slug}/contact` (OWNER/ADMIN only), including an existing Gmail or a test mailbox. Existing tenants retain a null value until configured. This address is a tenant **contact/Reply-To**, not permission to send email with an unverified sender domain. The platform sender stays on a verified FADEGO domain while the display name is the barbershop's name.
+Para aceitar reservas reais, a barbearia liga **o seu próprio Gmail**
+pela Google (OAuth com `gmail.send`, sem leitura da caixa de correio).
+O Gmail pessoal de suporte do FADEGO não é um remetente partilhado
+pelos parceiros. O cliente final indica apenas o seu **email obrigatório**
+para receber confirmação e links privados; não faz autorização Google.
 
-The contact address is included in the encrypted outbox snapshot for booking confirmation, changes, cancellations and private-link recovery. Old encrypted messages remain readable because the new field is optional. Private codes are not silently copied to the shop; shop-side automatic notifications would require a distinct privacy-safe template and consent/policy. Customer email remains mandatory. No provider connected, no live email or new paid service by this change. The free quota is shared across tenants.
+O campo `Barbershop.contactEmail` no painel serve somente para
+`Reply-To` facultativo: se não for preenchido, a resposta segue
+naturalmente para o Gmail de envio. Guardar este campo não altera
+a conta ligada nem liga outros provedores.
 
+O código conserva `senderAlias` e o adaptador para um eventual remetente
+verificado sob o domínio FADEGO, mas **ambos estão fora da oferta atual**:
+o campo alias está oculto no painel e as alterações de contacto preservam
+o valor já guardado. Não criar caixas pagas por subdomínio, não
+integrar Outlook/SMTP e não falsificar o endereço de envio.
 
-## Distinct authenticated sender for each barbershop
-
-- OWNER/ADMIN can select a safe sender alias (`senderAlias`, max 32 alphanumeric/hyphen characters) next to `contactEmail` in the already existing tenant email settings. They do **not** choose an untrusted outbound domain. Any alias is combined with that tenant's stable slug and the platform's **verified** sending domain: `escolhido+barbearia@dominio-fadego-verificado`. Long slugs use a deterministic hash to preserve the SMTP local-part length limit. No collision with another barbershop's normal slug, no passwords and no extra provider accounts for ordinary platform aliases.
-- The encrypted outbox snapshots the shop slug and chosen sender prefix alongside the reply address, so queued confirmation, cancellation, rescheduling and recovery messages consistently keep their original sender even if settings later change. Outboxes created by earlier versions (missing those optional fields) still send with the legacy platform address. This is a sent-message snapshot, **not** a global state lookup at retry time.
-- An existing Gmail/Outlook/other mailbox can be the `Reply-To`, but cannot be made `From` by typing its address. Actual send-as through Gmail would require delegated Gmail API OAuth authorization with `gmail.send`, encrypted refresh-token persistence, safe token revocation and Google consent/review; a client-owned domain would require DNS/domain sender authentication. These credentials/consents are **not set up** and sending from outside the verified platform domain is **not supported or claimed live** in this commit.
-- Provider activation, production emails, SNS/SMS/WhatsApp, DNS, billing, real customer tests and merge remain behind the existing material authorization boundary. The name chosen by the barbershop under the FADEGO domain does not imply an inbox is hosted: replies use the separately configured contact mailbox.
-
+O OAuth por barbearia é isolado por tenant, mantém token encriptado
+e tem duas portas de ativação independentes: autorização da Google
+e aceitação explícita de envio pelo titular, além da ativação
+global aprovada. Configurar a Google não significa que já exista
+consentimento OAuth no FADEGO, entrega real ou publicação na VPS.
 
 ## Gmail test sender — only after individual Google consent and staging approval
 
 - The Gmail OAuth web server flow uses `openid email https://www.googleapis.com/auth/gmail.send`, a per-tenant, one-use database-backed state, PKCE S256, ten-minute expiry, FADEGO active user/membership verification, and Google-verified email/sub identity. No Gmail password or inbox-reading scope is requested. Google's `gmail.send` is **sensitive**, requiring an appropriate verification/review before offering it publicly.
 - Dedicated `GMAIL_TOKEN_ENCRYPTION_SECRET` stays only in the approved VPS secret vault; encrypted verifier and refresh-token values are stored separately with purpose-specific HKDF keys and AES-256-GCM. The new SQL migration does not change existing bookings. The Google OAuth client ID and secret are also vault-only.
-- Callback `https://fadego.duckdns.org/api/integrations/gmail/callback` is a **proposed test URI, not proof of an approved or reachable OAuth redirect**. Google Cloud Console must accept and register this exact URI, and HTTPS/staging must actually be operational. DuckDNS domain ownership/Google OAuth branding restrictions remain unverified.
+- Callback `https://fadego.duckdns.org/api/integrations/gmail/callback` was configured by the Owner in Google Cloud for the test application, but has **not** been exercised in a real redirect. HTTPS/staging, OAuth callback and account-consent validity still require live proof; do not infer that the DuckDNS hostname is presently reachable.
 - A connected Gmail is **disabled for sending by default**. Enabling needs `BOOKING_EMAIL_PROVIDER=gmail`, `GMAIL_LIVE_SEND_ENABLED=true` (explicit approved deployment change) and a separate OWNER/ADMIN checkbox/action on the barbershop's Email page. Each new public booking checks the *individual tenant* Gmail status before accepting the booking.
 - When a send is allowed, the Gmail `From` is **exactly** the verified Google account mailbox. The former FADEGO branded-alias format applies **only** to platform-verified provider mode; Gmail cannot masquerade as `alias+slug@...` or another address. Replies can still use a different configured tenant mailbox.
 - The Gmail API has **no idempotency key** for `messages.send`. To avoid sending two copies containing the same private code, the worker records `GMAIL_SEND_ATTEMPTED` before dispatch. A crash/ambiguous response leads to `GMAIL_UNCERTAIN` and **no automatic resend**. The user must inspect Gmail Sent manually; actual delivery is not certified until the approved pilot. A provider refusal can be retried.

@@ -217,7 +217,7 @@ concluir a reserva. Sem o serviço de envio configurado, o endpoint devolve
 **503 EMAIL_UNAVAILABLE ANTES de criar qualquer marcação**. Não são aceites
 marcações que não tenham capacidade de serem confirmadas por email.
 
-**Fluxo ao ativar após o Human Gate do remetente:**
+**Fluxo Gmail único, apenas após HTTPS, autorização Google e ativação de envio aprovados:**
 
 1. O cliente escolhe serviço, profissional (ou livre), dia/hora, nome,
    telefone e **email obrigatório**. Não precisa de conta FADEGO.
@@ -225,38 +225,37 @@ marcações que não tenham capacidade de serem confirmadas por email.
    (apenas SHA-256) e **BookingEmailOutbox com o código encriptado AES-GCM**.
    Se um passo falhar, não existe reserva parcial.
 3. Depois de a transação terminar, o servidor tenta enviar a confirmação
-   diretamente via HTTPS Resend, com remetente verificado, endereço da
-   barbearia, serviço, dia/hora inicial, código e URL privado
-   `https://fadego.duckdns.org/r/CODIGO`. O fornecedor confirma a
-   **aceitação do pedido**, não garante entrada na caixa de correio.
+   pela Gmail API, usando **exclusivamente o Gmail que o titular daquela
+   barbearia autorizou**. O conteúdo inclui serviço, horário e link privado
+   `https://fadego.duckdns.org/r/CODIGO`. A resposta da Gmail API
+   confirma aceitação técnica, **não** a entrega na caixa de entrada.
 4. O mesmo link permite consultar o estado atual, **remarcar** e
    **cancelar** antes do início da reserva; as regras de disponibilidade
    e de isolamento entre barbearias já existentes continuam a ser usadas.
    Em alterações posteriores, o link original continua válido e mostra
    os dados atualizados.
-5. Se o fornecedor falhar, a marcação mantém-se válida e a página privada
-   assinala envio **pendente**. O trabalho encriptado fica no PostgreSQL
-   e `fadego-booking-email.timer` tenta novamente de cinco em cinco
-   minutos; os intervalos aumentam até no máximo uma hora por tentativa.
-   Para não multiplicar emails, cada pedido utiliza um Idempotency-Key
-   estável. O sistema não afirma que um email chegou só por haver HTTP 200.
-6. Nenhum email sai dos testes de CI: os testes usam remetentes fictícios
-   e transportes falsos. O cliente de envio não é invocado sem
-   `BOOKING_EMAIL_PROVIDER=resend`, `BOOKING_EMAIL_FROM` válido,
-   `BOOKING_EMAIL_API_KEY` e `NEXTAUTH_SECRET` carregados
-   pelo ambiente autorizado.
+5. Se a Gmail API recusar uma operação de forma inequívoca, o trabalho
+   encriptado fica no PostgreSQL e a fila de email pode voltar a tentar.
+   Se a resposta for **ambígua** depois de uma tentativa de envio,
+   o FADEGO marca `GMAIL_UNCERTAIN` e **não reenvia automaticamente**:
+   a Gmail API não oferece uma chave de idempotência para `messages.send`.
+   A reserva mantém-se válida e o sistema nunca confunde aceitação da
+   API com entrega garantida.
+6. Nenhum email real sai do CI: os testes usam contas fictícias e
+   pedidos Google simulados. O envio pelo Gmail exige **cumulativamente**
+   `BOOKING_EMAIL_PROVIDER=gmail`, `GMAIL_LIVE_SEND_ENABLED=true`,
+   OAuth válido, consentimento/ativação pelo dono da barbearia
+   e a configuração de segredos autorizada no cofre.
 
-**Human Gate real (já definido no projeto):** escolher/autorizar um serviço
-de email transacional, domínio e endereço remetente verificáveis, tratamento
-RGPD, custos, e ativação apenas na VPS de testes depois da autorização
-do Supervisor. Foi implementado um adaptador opcional para Resend sem
-dependências npm novas; não existe credencial nem conta Resend criada
-automaticamente e o envio real **não está ativo**.
+**Human Gate real:** a implantação HTTPS de testes na VPS partilhada
+exige aprovação do Supervisor e verificação de conflitos de infraestrutura.
+O consentimento OAuth **só pode ser prestado pelo titular do Gmail**
+quando a página de staging protegida estiver operacional. O envio de
+uma reserva real de demonstração exige depois autorização separada.
+Não contratar um serviço de email transacional: o fornecedor deste piloto
+é o Gmail do próprio negócio, como decidiu o Owner. O adaptador
+transacional antigo não é utilizado nem está autorizado neste piloto.
 
-- Definir `BOOKING_EMAIL_PROVIDER=resend` e remetente/chave no cofre
-  da VPS, nunca em Issues, GitHub, ficheiros de código ou screenshots.
-- Usar chave de API de permissões **somente de envio** e, se disponível,
-  restrita ao domínio remetente.
 - Instalar/ativar **apenas após aprovação** os ficheiros
   `deploy/staging/native/fadego-booking-email.service` e
   `fadego-booking-email.timer` junto do serviço FADEGO. Não instalar
@@ -313,13 +312,15 @@ que terceiros descubram se determinado cliente tem marcações.
   incluindo a gestão através do código, sem imposição retroativa de
   contacto ou destruição do histórico.
 
-**Limites atuais:** o remetente transacional real não está configurado nem
-verificado; a aplicação não envia emails reais, nem está publicada na VPS.
-A recuperação destina-se a reservas futuras, com email válido. A aprovação
-do fornecedor, domínio e identidade do remetente, custos, regras RGPD,
-prova real de entrega e autorização do Supervisor continuam a ser
-Human Gates existentes. SMS e recuperação de password **administrativa**
-permanecem fora do âmbito deste fluxo de clientes.
+**Limites atuais:** o Gmail pessoal das barbearias está implementado
+como integração OAuth, mas o consentimento real, a configuração validada
+do cofre na VPS e o HTTPS de staging ainda não foram comprovados.
+A aplicação não está publicada na VPS e não envia emails reais.
+A recuperação destina-se a futuras reservas com email válido.
+A aprovação do Supervisor para staging, o consentimento Google do
+titular, o teste real autorizado e o tratamento RGPD continuam por
+resolver. SMS e recuperação de password **administrativa** ficam
+fora deste piloto.
 
 ## Ligação Gmail de testes sem repetir a configuração Google
 
@@ -337,3 +338,17 @@ valores, a resposta `FADEGO_GMAIL_VAULT=READY` do verificador seguro. O
 Os bloqueios `disabled/false` do cofre prevalecem: **ligar a conta Google
 não ativa o envio de mensagens**. Só usar o Gmail já criado para o piloto;
 não contratar outro fornecedor nem criar um novo projeto Floot.
+
+### Portas fechadas antes da primeira instalação do Gmail
+
+No arranque inicial do staging, o operador aprovado deve fornecer
+`BOOKING_EMAIL_PROVIDER=disabled` e `GMAIL_LIVE_SEND_ENABLED=false`.
+`deploy/staging/native/build-release.sh` rejeita qualquer outro valor
+antes de construir ou migrar a base de testes; isto não é uma
+autorização de envio, nem substitui a revisão do Supervisor.
+
+O ficheiro `/etc/fadego-staging/app.env` é só para a aplicação e
+configuração **não Google**. Os segredos OAuth existentes continuam
+separados no cofre root, carregados apenas por systemd. Não preparar
+credenciais Resend, Outlook ou SMTP. A ativação Gmail posterior requer
+outra autorização e consentimento efetivo, sem refazer o projeto Google.

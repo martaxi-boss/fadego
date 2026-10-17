@@ -23,6 +23,7 @@ async function main() {
     data: {
       name: "Atelier FADEGO — Demonstração",
       contactEmail: "shop-a@example.test",
+      senderAlias: "cortes", // preserve future-domain configuration during Gmail-only pilot
       slug: "atelier-fadego-demo",
       status: "ACTIVE",
       timezone: "Europe/Lisbon",

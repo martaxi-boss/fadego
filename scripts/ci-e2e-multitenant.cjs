@@ -1,12 +1,30 @@
 /* CI-only browser validation of two separate tenants and restricted staff access. */
 const assert = require("node:assert/strict")
 const { chromium } = require("/tmp/fadego-playwright/node_modules/playwright")
+const { Client } = require("pg")
 
 const base = "http://localhost:3000"
 const shopA = "atelier-fadego-demo"
 const shopB = "barbearia-norte-demo"
 const privateCustomer = "Cliente Norte Fictício"
 const privatePhone = "+351 919 999 991"
+
+// Real disposable CI PostgreSQL assertion: hiding a future-domain sender field
+// must not silently clear its previously configured value.
+async function readSenderAlias(slug) {
+  const client = new Client({ connectionString: process.env.DATABASE_URL })
+  try {
+    await client.connect()
+    const { rows } = await client.query(
+      'SELECT "senderAlias" FROM "Barbershop" WHERE "slug" = $1',
+      [slug],
+    )
+    assert.equal(rows.length, 1, "Expected one synthetic tenant")
+    return rows[0].senderAlias
+  } finally {
+    await client.end()
+  }
+}
 
 async function open(page, path) {
   const response = await page.goto(base + path, {
@@ -105,21 +123,23 @@ async function main() {
     await open(owner, "/admin/" + shopA + "/contact")
     await assertCoreAccessibility(owner, "OWNER contact settings")
     const shopEmail = owner.locator('input[name="contactEmail"]')
-    const senderAlias = owner.locator('input[name="senderAlias"]')
     assert.equal(await shopEmail.inputValue(), "shop-a@example.test")
+    assert.match(await owner.locator("main").innerText(), /Gmail das reservas/)
+    assert.equal(await owner.locator('input[name="senderAlias"]').count(), 0,
+      "Future-domain sender aliases must not appear in Gmail-only pilot")
+    assert.equal(await readSenderAlias(shopA), "cortes",
+      "Synthetic shop must have a stored sender alias before the update")
     assert.equal(await owner.getByText("Ligação Google ainda indisponível", { exact: false }).count(), 1,
       "Gmail link remains closed until Google OAuth credentials are configured")
-    assert.equal(await owner.getByRole("button", { name: "Ligar o meu Gmail com a Google" }).count(), 0,
+    assert.equal(await owner.getByRole("button", { name: "Ligar o Gmail do negócio com a Google" }).count(), 0,
       "No active Gmail OAuth action before explicit platform setup")
-    assert.equal(await senderAlias.inputValue(), "")
     await shopEmail.fill("owner-test-inbox@example.test")
-    await senderAlias.fill("cortes")
-    await owner.getByRole("button", { name: "Guardar email" }).click()
+    await owner.getByRole("button", { name: "Guardar email para respostas" }).click()
     await owner.waitForURL((url) => url.searchParams.get("notice") === "saved", { timeout: 20000 })
     assert.equal(await owner.locator('input[name="contactEmail"]').inputValue(),
-      "owner-test-inbox@example.test", "OWNER must save tenant-specific mailbox")
-    assert.equal(await owner.locator('input[name="senderAlias"]').inputValue(),
-      "cortes", "OWNER must save tenant-specific verified-domain alias")
+      "owner-test-inbox@example.test", "OWNER must save tenant-specific reply mailbox")
+    assert.equal(await readSenderAlias(shopA), "cortes",
+      "Editing the contact must preserve the future-domain sender alias")
     await open(owner, "/admin/" + shopA + "/customers")
     const ownerCustomers = await owner.locator("main").innerText()
     assert.match(ownerCustomers, /João de Exemplo/)

@@ -505,6 +505,12 @@ export default function PublicBookingFlow({
             Vais receber neste email a confirmação, o código e um link privado
             para consultar, remarcar ou cancelar a reserva, sem criar uma conta.
           </p>
+          <p className="text-xs leading-6 text-gray-600">
+            Já tens uma reserva e perdeste o acesso?{" "}
+            <a className="font-semibold text-[#176846] underline underline-offset-4" href={"/b/" + encodeURIComponent(slug) + "/recuperar"}>
+              Recuperar a marcação por email
+            </a>
+          </p>
 
           {error ? (
             <p

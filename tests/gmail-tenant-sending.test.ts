@@ -119,3 +119,80 @@ test("Gmail pilot is isolated per tenant and suspension blocks a queued send", a
     globalThis.fetch = previousFetch
   }
 })
+
+test("expired Gmail token closes only its tenant; a temporary Google outage keeps consent", async () => {
+  Object.assign(process.env, fakeEnv)
+  const config = gmailOAuthConfig()
+  assert.ok(config)
+  const suffix = randomUUID().replace(/-/g, "").slice(0, 12)
+  const owner = await db.user.create({
+    data: { email: "owner-expired-" + suffix + "@example.test", passwordHash: "ci-not-login" },
+  })
+  users.push(owner.id)
+  const expired = await db.barbershop.create({
+    data: { name: "Barbearia Com Token Expirado", slug: "ci-gmail-expired-" + suffix },
+  })
+  const healthy = await db.barbershop.create({
+    data: { name: "Barbearia Independente", slug: "ci-gmail-healthy-" + suffix },
+  })
+  shops.push(expired.id, healthy.id)
+  const approved = new Date(Date.now() - 120_000)
+  const firstToken = sealGmailCredential("E".repeat(60), config, "refresh-token")
+  const secondToken = sealGmailCredential("H".repeat(60), config, "refresh-token")
+  for (const [shop, mailbox, token] of [
+    [expired, "expired@gmail.com", firstToken],
+    [healthy, "healthy@gmail.com", secondToken],
+  ] as const) {
+    await db.gmailSenderConnection.create({
+      data: {
+        barbershopId: shop.id,
+        email: mailbox,
+        googleSubject: "ci-google-" + shop.id,
+        sealedRefreshToken: token,
+        authorizedByUserId: owner.id,
+        sendingEnabledAt: approved,
+      },
+    })
+  }
+
+  const makeMessage = () => ({
+    from: "Barbearia Com Token Expirado <expired@gmail.com>",
+    to: "customer@example.test",
+    subject: "Teste sem envio",
+    text: "Nunca enviar este email",
+  })
+  const noSend = async () => {
+    throw new Error("A failed Google refresh must never initiate Gmail sending")
+  }
+  const originalFetch = globalThis.fetch
+  let googleCalls = 0
+  try {
+    assert.equal(await gmailTenantReady(expired.slug), true)
+    assert.equal(await gmailTenantReady(healthy.slug), true)
+    globalThis.fetch = (async (input) => {
+      assert.equal(String(input), "https://oauth2.googleapis.com/token")
+      googleCalls += 1
+      return Response.json({ error: "invalid_grant" }, { status: 400 })
+    }) as typeof fetch
+    const firstJob = { barbershopId: expired.id, createdAt: new Date(Date.now() - 60_000) }
+    assert.equal(await sendAuthorizedGmailBooking(firstJob, makeMessage, noSend), "refused")
+    assert.equal(await gmailTenantReady(expired.slug), false)
+    assert.equal(await gmailTenantReady(healthy.slug), true)
+    assert.equal(await db.gmailSenderConnection.findUnique({
+      where: { barbershopId: expired.id },
+    }), null, "Expired Google credentials must require the owner to reconnect")
+
+    globalThis.fetch = (async (input) => {
+      assert.equal(String(input), "https://oauth2.googleapis.com/token")
+      googleCalls += 1
+      return Response.json({ error: "temporarily_unavailable" }, { status: 503 })
+    }) as typeof fetch
+    const otherJob = { barbershopId: healthy.id, createdAt: new Date(Date.now() - 60_000) }
+    assert.equal(await sendAuthorizedGmailBooking(otherJob, makeMessage, noSend), "refused")
+    assert.equal(await gmailTenantReady(healthy.slug), true,
+      "Transient Google failures must not revoke a healthy tenant's consent")
+    assert.equal(googleCalls, 2)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})

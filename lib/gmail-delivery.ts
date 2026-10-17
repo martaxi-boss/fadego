@@ -66,8 +66,27 @@ export const sendAuthorizedGmailBooking = async (
         },
       })
     }
-  } catch {
-    // No send happened yet. Do not reveal tokens or Google errors.
+  } catch (error) {
+    // Google explicitly rejected an expired/revoked refresh token. Remove
+    // ONLY that exact invalid connection so public reservations fail closed
+    // until the owner reconnects Gmail with fresh Google consent.
+    // Do not disconnect for outages, rate limits or ambiguous responses.
+    if (error instanceof Error && error.message === "GMAIL_REFRESH_REVOKED") {
+      try {
+        await db.gmailSenderConnection.deleteMany({
+          where: {
+            barbershopId: job.barbershopId,
+            googleSubject: conn.googleSubject,
+            email: conn.email,
+            sealedRefreshToken: conn.sealedRefreshToken,
+            sendingEnabledAt: conn.sendingEnabledAt,
+          },
+        })
+      } catch {
+        // No Gmail message was sent; database failures remain retryable.
+      }
+    }
+    // Never reveal the token, Google error body, or customer details.
     return "refused"
   }
 

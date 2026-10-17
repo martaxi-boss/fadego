@@ -135,6 +135,17 @@ const formPost = async (data: URLSearchParams, fetcher: typeof fetch) => {
     body: data,
   })
   if (!response.ok) {
+    // Google can permanently invalidate a Gmail refresh token (revocation,
+    // 7-day Testing expiry). Only this explicit response is definitive.
+    // Network/5xx and other 4xx errors must NOT disconnect a tenant.
+    if (response.status === 400 && data.get("grant_type") === "refresh_token") {
+      let failure: unknown
+      try { failure = await response.json() } catch { /* invalid error body */ }
+      if (failure && typeof failure === "object" &&
+          "error" in failure && failure.error === "invalid_grant") {
+        throw new Error("GMAIL_REFRESH_REVOKED")
+      }
+    }
     await response.body?.cancel()
     throw new Error("GMAIL_TOKEN_REQUEST_REJECTED")
   }

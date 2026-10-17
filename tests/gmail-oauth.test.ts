@@ -103,6 +103,36 @@ test("Google verified identity is mandatory and refresh uses only offline creden
   assert.equal(got.accessToken, "a".repeat(60))
 })
 
+test("refresh distinguishes revoked Google grants from temporary provider failures", async () => {
+  const revoked: typeof fetch = async (url, options) => {
+    assert.equal(String(url), "https://oauth2.googleapis.com/token")
+    assert.equal((options?.body as URLSearchParams).get("grant_type"), "refresh_token")
+    return Response.json({ error: "invalid_grant", error_description: "not shown" }, { status: 400 })
+  }
+  await assert.rejects(
+    refreshGmailAccessToken(config, "r".repeat(60), revoked),
+    /GMAIL_REFRESH_REVOKED/,
+  )
+  const outage: typeof fetch = async () =>
+    Response.json({ error: "temporarily_unavailable" }, { status: 503 })
+  await assert.rejects(
+    refreshGmailAccessToken(config, "r".repeat(60), outage),
+    /GMAIL_TOKEN_REQUEST_REJECTED/,
+  )
+  const wrongError: typeof fetch = async () =>
+    Response.json({ error: "invalid_client" }, { status: 400 })
+  await assert.rejects(
+    refreshGmailAccessToken(config, "r".repeat(60), wrongError),
+    /GMAIL_TOKEN_REQUEST_REJECTED/,
+  )
+  const badBody: typeof fetch = async () =>
+    new Response("not-json", { status: 400 })
+  await assert.rejects(
+    refreshGmailAccessToken(config, "r".repeat(60), badBody),
+    /GMAIL_TOKEN_REQUEST_REJECTED/,
+  )
+})
+
 test("send API encodes RFC2822 UTF-8 message and never forges another mailbox", async () => {
   const msg = {
     from: "Barbearia do João <owner@gmail.com>",

@@ -13,7 +13,7 @@ import { barbershopSlugSchema } from "@/lib/validation"
 
 const requestSchema = z.object({
   barbershopSlug: barbershopSlugSchema,
-  email: z.email().max(254).transform((s) => s.trim().toLowerCase()),
+  email: z.string().trim().toLowerCase().email().max(254),
   phone: z.string().trim().min(6).max(32),
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 })

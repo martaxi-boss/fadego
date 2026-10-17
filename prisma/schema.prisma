@@ -278,21 +278,21 @@ model BookingAccessToken {
 // encrypted with an application-managed key derived from NEXTAUTH_SECRET.
 // Never store bearer credentials in plaintext email queues or log payloads.
 model BookingEmailOutbox {
-  id            String    @id @default(uuid())
-  barbershopId  String
-  bookingId     String
-  kind          String    @default("CONFIRMATION") @db.VarChar(20)
-  sealedPayload String    @db.Text
-  recoveryTokenHash String? @unique @db.VarChar(64)
-  recoveryExpiresAt DateTime? @db.Timestamptz(3)
+  id                 String    @id @default(uuid())
+  barbershopId       String
+  bookingId          String
+  kind               String    @default("CONFIRMATION") @db.VarChar(20)
+  sealedPayload      String    @db.Text
+  recoveryTokenHash  String?   @unique @db.VarChar(64)
+  recoveryExpiresAt  DateTime? @db.Timestamptz(3)
   recoveryRedeemedAt DateTime? @db.Timestamptz(3)
-  discardedAt DateTime? @db.Timestamptz(3)
-  attemptCount  Int       @default(0)
-  nextAttemptAt DateTime  @default(now()) @db.Timestamptz(3)
-  leaseUntil    DateTime? @db.Timestamptz(3)
-  acceptedAt    DateTime? @db.Timestamptz(3)
-  lastErrorCode String?   @db.VarChar(32)
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  discardedAt        DateTime? @db.Timestamptz(3)
+  attemptCount       Int       @default(0)
+  nextAttemptAt      DateTime  @default(now()) @db.Timestamptz(3)
+  leaseUntil         DateTime? @db.Timestamptz(3)
+  acceptedAt         DateTime? @db.Timestamptz(3)
+  lastErrorCode      String?   @db.VarChar(32)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
 
   booking Booking @relation(fields: [bookingId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
 

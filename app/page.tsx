@@ -2,7 +2,7 @@ import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowRight, ArrowUpRight, CalendarDays, Check,
-  Clock3, Mail, Scissors, ShieldCheck, Sparkles,
+  Mail, Scissors, ShieldCheck, Sparkles,
   UsersRound,
 } from "lucide-react"
 

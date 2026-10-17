@@ -56,9 +56,10 @@ export default function BookingRecoveryForm({ slug }: { slug: string }) {
       </div>
       <h1 className="mt-5 text-3xl font-black tracking-[-0.05em] text-[#193a2d]">Recuperar a minha marcação</h1>
       <p className="mt-3 text-sm leading-7 text-[#647769]">
-        Perdeste o código ou o link? Indica o email, telefone e dia que
-        utilizaste na reserva. Se os dados coincidirem com uma marcação,
-        enviamos um link de recuperação para o teu email.
+        Perdeste o código ou o link? Indica o email, o telefone e o dia
+        em que a marcação está atualmente agendada. Se já mudaste a data,
+        utiliza o novo dia. Se os dados coincidirem com uma marcação,
+        receberás um link de recuperação no teu email.
       </p>
       {done ? (
         <div className="mt-7 rounded-2xl border border-[#cfe8ce] bg-[#f0f8ef] p-5 text-sm leading-7 text-[#29563d]" role="status">

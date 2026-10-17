@@ -19,7 +19,7 @@ const booking = {
 test("tenant contact accepts existing mailboxes and rejects forged headers", () => {
   assert.equal(barbershopContactEmailSchema.parse("  OWNER@GMAIL.COM "), "owner@gmail.com")
   assert.equal(barbershopContactEmailSchema.parse(""), null)
-  for (const value of ["not-email", "user\\r\\nBCC:other@example.test", "user@@example.test"]) {
+  for (const value of ["not-email", "user" + String.fromCharCode(13, 10) + "BCC:other@example.test", "user@@example.test"]) {
     assert.equal(barbershopContactEmailSchema.safeParse(value).success, false)
   }
 })
@@ -51,9 +51,11 @@ test("tenant reply address stays encrypted in queued message", () => {
 test("missing tenant mailbox and malicious display name never spoof From", () => {
   const msg = bookingConfirmationMessage({
     ...booking, barbershopContactEmail: undefined,
-    barbershopName: "Example\\r\\nBCC:bad@example.test <forged@malicious.test>",
+    barbershopName: "Example" + String.fromCharCode(13, 10) + "BCC:bad@example.test <forged@malicious.test>",
   }, "https://fadego.duckdns.org", "reservas@verified.example")
   assert.equal(msg.replyTo, undefined)
   assert.ok(msg.from.endsWith("<reservas@verified.example>"))
-  assert.doesNotMatch(msg.from, /\\r|\\n|<forged@/)
+  assert.equal(msg.from.includes(String.fromCharCode(10)), false)
+  assert.equal(msg.from.includes(String.fromCharCode(13)), false)
+  assert.equal(msg.from.includes("<forged@"), false)
 })

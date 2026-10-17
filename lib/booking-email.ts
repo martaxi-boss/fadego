@@ -58,8 +58,7 @@ export const bookingConfirmationMessage = (
 
   // Sender domain remains verified/central; tenant controls only display and reply.
   const senderName = line(payload.barbershopName)
-    .replace(/[^\\p{L}\\p{N} .&'-]/gu, " ").replace(/\\s+/g, " ")
-    .trim().slice(0, 80) || "FADEGO"
+    .replace(/[^A-Za-zÀ-ÿ0-9 .&'-]/g, " ").trim().slice(0, 80) || "FADEGO"
   const brandedFrom = senderName + " <" + from + ">"
   const replyTo = payload.barbershopContactEmail
   const kind = payload.kind ?? "CONFIRMATION"

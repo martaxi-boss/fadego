@@ -9,6 +9,15 @@ const GOOGLE_GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/me
 const CALLBACK_PATH = "/api/integrations/gmail/callback"
 const noRedirect = "manual" as const
 
+type GmailOAuthEnvironment = {
+  GOOGLE_GMAIL_CLIENT_ID?: string
+  GOOGLE_GMAIL_CLIENT_SECRET?: string
+  GMAIL_TOKEN_ENCRYPTION_SECRET?: string
+  NEXTAUTH_URL?: string
+  BOOKING_EMAIL_PROVIDER?: string
+  GMAIL_LIVE_SEND_ENABLED?: string
+}
+
 export type GmailConfig = {
   clientId: string
   clientSecret: string
@@ -27,7 +36,7 @@ export type GmailEmail = {
 
 export type GoogleIdentity = { sub: string; email: string }
 
-export const gmailOAuthConfig = (env: NodeJS.ProcessEnv = process.env): GmailConfig | null => {
+export const gmailOAuthConfig = (env: GmailOAuthEnvironment = process.env): GmailConfig | null => {
   const clientId = env.GOOGLE_GMAIL_CLIENT_ID?.trim() || ""
   const clientSecret = env.GOOGLE_GMAIL_CLIENT_SECRET || ""
   const encryptionSecret = env.GMAIL_TOKEN_ENCRYPTION_SECRET || ""
@@ -49,7 +58,7 @@ export const gmailOAuthConfig = (env: NodeJS.ProcessEnv = process.env): GmailCon
 }
 
 // The second, global deployment/owner gate defaults closed, even after OAuth consent.
-export const gmailLiveSendReady = (env: NodeJS.ProcessEnv = process.env) =>
+export const gmailLiveSendReady = (env: GmailOAuthEnvironment = process.env) =>
   env.BOOKING_EMAIL_PROVIDER === "gmail" &&
   env.GMAIL_LIVE_SEND_ENABLED === "true" &&
   gmailOAuthConfig(env) !== null

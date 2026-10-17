@@ -289,7 +289,10 @@ que terceiros descubram se determinado cliente tem marcações.
   compatível com o email, telefone e dia. Não revela nomes, números ou
   confirmação de existência numa resposta pública.
 - Apenas com o remetente autorizado ativo se cria uma notificação
-  `RECOVERY`; o link usa um token aleatório de **256 bits**. O PostgreSQL
+  `RECOVERY`. A API pública **não faz envio síncrono** para impedir
+  a descoberta de clientes por diferenças no tempo de resposta:
+  o worker do FADEGO trata a fila. O link usa um token aleatório de
+  **256 bits**. O PostgreSQL
   guarda só SHA-256 do token, com validade de **20 minutos**, sem acesso
   aos dados pessoais da reserva. O token no email é encriptado até à
   aceitação pelo fornecedor, quando o texto cifrado é apagado.

@@ -117,40 +117,64 @@ export const requestBookingRecovery = async (
   if (matches.length !== 1) return generic
   const booking = matches[0]
 
-  // Avoid sending multiple currently valid recovery links for one booking.
-  const existing = await db.bookingEmailOutbox.count({
-    where: {
-      barbershopId: tenant.id,
-      bookingId: booking.id,
-      kind: "RECOVERY",
-      recoveryRedeemedAt: null,
-      recoveryExpiresAt: { gt: now },
-      discardedAt: null,
-    },
-  })
-  if (existing > 0) return generic
+  // The existing-link check and insertion must share a tenant-level
+  // transaction lock. Otherwise two simultaneous requests could each
+  // observe zero active links and enqueue duplicate recovery emails.
+  await runBookingMutation(async (tx) => {
+    await acquireTenantBookingLock(tx, tenant.id)
+    const current = await tx.booking.findUnique({
+      where: {
+        id_barbershopId: { id: booking.id, barbershopId: tenant.id },
+      },
+      select: {
+        status: true, startsAt: true, customerEmailSnapshot: true,
+        customerPhoneSnapshot: true,
+      },
+    })
+    // The appointment may have changed between the initial private
+    // lookup and acquisition of the lock. Never email a stale match.
+    if (
+      !current || current.startsAt <= now ||
+      !["CONFIRMED", "NEEDS_REASSIGNMENT"].includes(current.status) ||
+      current.customerEmailSnapshot !== parsed.data.email ||
+      digits(current.customerPhoneSnapshot) !== digits(parsed.data.phone) ||
+      bookingLocalDate(current.startsAt, tenant.timezone!) !== parsed.data.localDate
+    ) return
 
-  // 256-bit bearer token; the database stores only its digest.
-  const token = randomBytes(32).toString("base64url")
-  const sealedPayload = sealBookingEmail({
-    kind: "RECOVERY",
-    recoveryToken: token,
-    email: booking.customerEmailSnapshot!,
-    customerName: booking.customerNameSnapshot.slice(0, 120),
-    barbershopName: tenant.name.slice(0, 200),
-    serviceName: booking.serviceNameSnapshot.slice(0, 200),
-    startsAt: booking.startsAt.toISOString(),
-    timezone: tenant.timezone,
-  })
-  await db.bookingEmailOutbox.create({
-    data: {
-      barbershopId: tenant.id,
-      bookingId: booking.id,
+    const existing = await tx.bookingEmailOutbox.count({
+      where: {
+        barbershopId: tenant.id,
+        bookingId: booking.id,
+        kind: "RECOVERY",
+        recoveryRedeemedAt: null,
+        recoveryExpiresAt: { gt: now },
+        discardedAt: null,
+      },
+    })
+    if (existing > 0) return
+
+    // 256-bit bearer token; the database stores only its digest.
+    const token = randomBytes(32).toString("base64url")
+    const sealedPayload = sealBookingEmail({
       kind: "RECOVERY",
-      sealedPayload,
-      recoveryTokenHash: sha256(token),
-      recoveryExpiresAt: new Date(now.getTime() + MAX_AGE_MS),
-    },
+      recoveryToken: token,
+      email: booking.customerEmailSnapshot!,
+      customerName: booking.customerNameSnapshot.slice(0, 120),
+      barbershopName: tenant.name.slice(0, 200),
+      serviceName: booking.serviceNameSnapshot.slice(0, 200),
+      startsAt: booking.startsAt.toISOString(),
+      timezone: tenant.timezone!,
+    })
+    await tx.bookingEmailOutbox.create({
+      data: {
+        barbershopId: tenant.id,
+        bookingId: booking.id,
+        kind: "RECOVERY",
+        sealedPayload,
+        recoveryTokenHash: sha256(token),
+        recoveryExpiresAt: new Date(now.getTime() + MAX_AGE_MS),
+      },
+    })
   })
 
   // A worker sends the email independently. Never perform slow external

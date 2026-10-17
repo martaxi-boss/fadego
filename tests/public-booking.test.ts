@@ -1199,6 +1199,40 @@ test("email recovery preserves old link until verified, then rotates token exact
   }), 2, "after redemption a new recovery request can be made")
 })
 
+test("simultaneous recovery requests enqueue only one valid link per booking", async () => {
+  const fixture = await createFixture("recovery-concurrency")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+
+  const identifier = {
+    barbershopSlug: fixture.shop.slug,
+    email: "maria@example.test",
+    phone: "+34 600 123 456",
+    localDate: "2030-01-07",
+  }
+  const now = () => new Date("2029-01-01T10:00:00Z")
+  const requests = Array.from({ length: 5 }, (_, index) =>
+    requestBookingRecovery(identifier, {
+      providerReady: () => true,
+      consumeLimit: allowLimit,
+      sourceIp: "198.51.100." + (151 + index),
+      now,
+    }),
+  )
+  const results = await Promise.all(requests)
+  for (const result of results) assert.deepEqual(result, { ok: true })
+
+  const jobs = await db.bookingEmailOutbox.findMany({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  })
+  assert.equal(jobs.length, 1, "parallel callers cannot enqueue duplicate valid links")
+  assert.equal(jobs[0].recoveryRedeemedAt, null)
+  assert.equal(jobs[0].discardedAt, null)
+  assert.equal((await lookup(created.accessCode)).ok, true)
+})
+
 test("recovery does not reveal customer existence and expires before a late email can be sent", async () => {
   const fixture = await createFixture("recovery-privacy")
   await addGeneralChair(fixture.shop.id)

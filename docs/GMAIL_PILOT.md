@@ -52,3 +52,27 @@ o serviço de envio e o DNS continuam pendentes de autorização e implementaç�
 Um subdomínio não oferece automaticamente uma caixa de correio.
 Enquanto isso, a interface mostra ambas as possibilidades sem as apresentar
 como serviços ativos e as portas de envio continuam fechadas por defeito.
+
+## Preparação do piloto Gmail sem domínio comercial
+
+A prioridade atual do Owner é experimentar o Gmail já configurado;
+não esperar pela compra do domínio comercial nem criar novos remetentes.
+O teste de integração começa com `BOOKING_EMAIL_PROVIDER=disabled`
+e `GMAIL_LIVE_SEND_ENABLED=false`. A autorização da conta Google
+pode ser demonstrada apenas após existir staging HTTPS isolado, autenticação
+de testes e aprovação do Supervisor. Nenhum botão do painel ou consentimento
+Google envia automaticamente uma mensagem.
+
+O contrato do cofre pode ser verificado **na VPS autorizada** com
+`sudo python3 scripts/check-gmail-vault.py` **depois** de instalar a
+revisão aprovada do FADEGO. A verificação é somente de leitura, não faz
+requisições à Google, não imprime valores nem altera o cofre. Devolve
+apenas `FADEGO_GMAIL_VAULT=READY` ou `FADEGO_GMAIL_VAULT=NOT_READY`.
+O GitHub CI executa **apenas** a verificação sintética `--self-test`,
+nunca acede às credenciais reais da VPS. A validade do Client Secret
+só pode ser comprovada pelo fluxo OAuth com consentimento real.
+
+O trabalhador Gmail também confirma que a barbearia continua `ACTIVE`
+antes e depois da troca remota de token; suspensões durante a chamada
+bloqueiam o envio. As novas capturas CI incluem os ecrãs de configuração
+de email no computador e no telemóvel, com dados fictícios.

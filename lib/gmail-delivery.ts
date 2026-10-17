@@ -31,6 +31,12 @@ export const sendAuthorizedGmailBooking = async (
 ): Promise<GmailSendOutcome> => {
   const config = gmailOAuthConfig()
   if (!config || !gmailLiveSendReady()) return "disabled"
+  // A suspended or archived barbershop must never use a previously approved
+  // sender. Check both before the Google refresh and after remote I/O.
+  const tenant = await db.barbershop.findUnique({
+    where: { id: job.barbershopId }, select: { status: true },
+  })
+  if (tenant?.status !== "ACTIVE") return "disabled"
   const conn = await db.gmailSenderConnection.findUnique({
     where: { barbershopId: job.barbershopId },
     select: {
@@ -67,13 +73,16 @@ export const sendAuthorizedGmailBooking = async (
 
   // A pause, disconnect or account replacement during the OAuth refresh
   // must prevent this worker from sending as the prior account.
-  const stillApproved = await db.gmailSenderConnection.findUnique({
-    where: { barbershopId: job.barbershopId },
-    select: {
-      googleSubject: true, email: true, sendingEnabledAt: true,
-    },
-  })
-  if (!stillApproved?.sendingEnabledAt ||
+  const [stillApproved, currentTenant] = await Promise.all([
+    db.gmailSenderConnection.findUnique({
+      where: { barbershopId: job.barbershopId },
+      select: { googleSubject: true, email: true, sendingEnabledAt: true },
+    }),
+    db.barbershop.findUnique({
+      where: { id: job.barbershopId }, select: { status: true },
+    }),
+  ])
+  if (currentTenant?.status !== "ACTIVE" || !stillApproved?.sendingEnabledAt ||
       stillApproved.googleSubject !== conn.googleSubject ||
       stillApproved.email !== conn.email ||
       stillApproved.sendingEnabledAt.getTime() !== conn.sendingEnabledAt.getTime()) {

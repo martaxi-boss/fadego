@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto"
 import { z } from "zod"
 import { bookingAccessPath, issueBookingAccessToken } from "@/lib/booking-access"
 import { sealBookingEmail } from "@/lib/booking-email-crypto"
-import { bookingEmailProviderReady, deliverBookingEmail } from "@/lib/booking-email"
+import { bookingEmailProviderReady } from "@/lib/booking-email"
 import { runBookingMutation } from "@/lib/booking-engine"
 import { db } from "@/lib/prisma"
 import {
@@ -142,7 +142,7 @@ export const requestBookingRecovery = async (
     startsAt: booking.startsAt.toISOString(),
     timezone: tenant.timezone,
   })
-  const message = await db.bookingEmailOutbox.create({
+  await db.bookingEmailOutbox.create({
     data: {
       barbershopId: tenant.id,
       bookingId: booking.id,
@@ -151,15 +151,11 @@ export const requestBookingRecovery = async (
       recoveryTokenHash: sha256(token),
       recoveryExpiresAt: new Date(now.getTime() + MAX_AGE_MS),
     },
-    select: { id: true },
   })
 
-  // No private code, email address or job identifier in the API response.
-  try {
-    await deliverBookingEmail(message.id)
-  } catch {
-    // The encrypted outbox preserves the pending email for scheduled retry.
-  }
+  // A worker sends the email independently. Never perform slow external
+  // network I/O inside this public endpoint: it would reveal whether the
+  // customer exists through response timing, despite the generic body.
   return generic
 }
 

@@ -20,7 +20,8 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Customer directory restricted to OWNER/ADMIN
 - [x] CI browser rehearsal with synthetic barbershop workflow: OWNER reassign/cancel/complete/no-show; STAFF read-only agenda with contacts masked, cross-tenant denied
 - [ ] Per-professional STAFF agenda restriction (requires an approved link between login identity and operational StaffMember)
-- [ ] API audit, dependency audit, performance, accessibility and stress tests
+- [x] Basic browser accessibility smoke: Portuguese document language, visible form-control names, image alt attributes on booking/login/recovery/OWNER/STAFF views (not a full WCAG audit)
+- [ ] Full API/dependency audit, performance, WCAG accessibility audit and load/stress certification
 - [x] Public booking requires customer email; encrypted confirmation outbox with automatic retries (code/CI)
 - [ ] Provider-approved real email sender, domain verification, live delivery proof, and opt-out policies for other notifications
 - [x] Encrypted email events for customer cancellations and reschedules with same-transaction outbox and idempotent retries (code/CI)

@@ -35,6 +35,38 @@ async function assertNoPrivateCustomer(page, where) {
   assert.ok(!body.includes(privatePhone), where + ": unexpected phone")
 }
 
+// Minimal structural accessibility contract (not a WCAG certification).
+// Run in the actual browser: unlabelled interactive controls and images
+// must not escape the production build.
+async function assertCoreAccessibility(page, where) {
+  const report = await page.evaluate(() => {
+    const main = document.querySelector("main")
+    if (!main) return { lang: document.documentElement.lang, main: false, controls: [], images: [] }
+    const visible = (el) => el.getClientRects().length > 0
+    const controls = [...main.querySelectorAll("button, input, select, textarea")]
+      .filter((el) => visible(el) && el.getAttribute("type") !== "hidden")
+      .filter((el) => {
+        if (el.getAttribute("aria-label")?.trim()) return false
+        if (el.getAttribute("aria-labelledby")?.trim()) return false
+        if (el.labels?.length) return false
+        if (el.tagName === "BUTTON" && el.textContent?.trim()) return false
+        if (el.tagName === "INPUT" &&
+          ["submit", "button", "reset"].includes(el.type) && el.value) return false
+        return true
+      })
+      .map((el) => el.tagName.toLowerCase() + (el.getAttribute("name") ? "[name=" +
+        el.getAttribute("name") + "]" : ""))
+    const images = [...main.querySelectorAll("img")]
+      .filter((el) => visible(el) && !el.hasAttribute("alt"))
+      .map((el) => el.getAttribute("src")?.slice(0, 90) ?? "unknown")
+    return { lang: document.documentElement.lang, main: true, controls, images }
+  })
+  assert.equal(report.lang, "pt-PT", where + ": document language must be Portuguese")
+  assert.equal(report.main, true, where + ": main landmark is required")
+  assert.deepEqual(report.controls, [], where + ": visible controls require accessible names")
+  assert.deepEqual(report.images, [], where + ": images require alt text (may be empty for decoration)")
+}
+
 async function main() {
   const browser = await chromium.launch({
     channel: "chrome",
@@ -47,11 +79,19 @@ async function main() {
     let response = await open(anonymous, "/b/" + shopA)
     assert.equal(response.status(), 200)
     assert.match(await anonymous.locator("main").innerText(), /Corte masculino/)
+    await assertCoreAccessibility(anonymous, "public shop A")
+    const bookingEmailInput = anonymous.locator('input[name="email"]')
+    assert.equal(await bookingEmailInput.getAttribute("required"), "", "Booking email is mandatory")
 
     response = await open(anonymous, "/b/" + shopB)
     assert.equal(response.status(), 200)
     assert.match(await anonymous.locator("main").innerText(), /Corte Norte/)
     await assertNoPrivateCustomer(anonymous, "Anonymous public booking page")
+    await assertCoreAccessibility(anonymous, "public shop B")
+
+    response = await open(anonymous, "/b/" + shopA + "/recuperar")
+    assert.equal(response.status(), 200)
+    await assertCoreAccessibility(anonymous, "customer recovery")
 
     await open(anonymous, "/admin/" + shopB)
     assert.ok(["/admin", "/login"].includes(route(anonymous)), "Anonymous tenant dashboard must redirect")
@@ -59,6 +99,8 @@ async function main() {
 
     const ownerContext = await browser.newContext()
     const owner = await ownerContext.newPage()
+    await open(owner, "/login")
+    await assertCoreAccessibility(owner, "administrative login")
     await signIn(owner, process.env.FADEGO_DEMO_EMAIL)
     await open(owner, "/admin/" + shopA + "/customers")
     const ownerCustomers = await owner.locator("main").innerText()
@@ -66,6 +108,7 @@ async function main() {
     assert.ok(!ownerCustomers.includes(privateCustomer), "Cross-tenant customer leaked to OWNER")
     // Owner-facing barbershop rehearsal, performed only on disposable CI data.
     await open(owner, "/admin/" + shopA + "/agenda?date=2030-05-20&status=NEEDS_REASSIGNMENT")
+    await assertCoreAccessibility(owner, "OWNER agenda")
     const filteredAgenda = await owner.locator("main").innerText()
     assert.match(filteredAgenda, /André Demonstração/, "Owner must find reassignments")
     assert.ok(!filteredAgenda.includes("João de Exemplo"), "Status filter must hide other bookings")
@@ -121,6 +164,7 @@ async function main() {
     assert.ok(!staffShops.includes("Atelier FADEGO"), "STAFF must not list tenant A")
 
     await open(staff, "/admin/" + shopB + "/agenda?date=2030-05-20")
+    await assertCoreAccessibility(staff, "STAFF agenda")
     const staffAgenda = await staff.locator("main").innerText()
     assert.match(staffAgenda, /Cliente Norte Fictício/)
     assert.ok(!staffAgenda.includes(privatePhone), "STAFF agenda must redact phone")
@@ -145,7 +189,7 @@ async function main() {
     await assertNoPrivateCustomer(staff, "STAFF unauthorized tenant")
     await staffContext.close()
 
-    console.log("FADEGO E2E tenant isolation PASS: OWNER agenda workflow (reassign, cancel, complete, no-show), STAFF restrictions, public booking and cross-tenant redaction.")
+    console.log("FADEGO E2E tenant isolation PASS: OWNER agenda workflow, STAFF restrictions, browser form accessibility, mandatory booking email and cross-tenant redaction.")
   } finally {
     await browser.close()
   }

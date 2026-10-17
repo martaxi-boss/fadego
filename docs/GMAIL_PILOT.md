@@ -27,3 +27,28 @@ Fontes oficiais:
 - [Google OAuth para aplicações web](https://developers.google.com/identity/protocols/oauth2/web-server)
 - [Gmail messages.send](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/send)
 - [Gestão dos utilizadores de teste OAuth](https://support.google.com/cloud/answer/15549945)
+
+## Configuração real do piloto pelo Owner (17/10/2026)
+
+O Owner concluiu no Google Cloud o projeto de teste, a ativação da Gmail API,
+a criação do cliente OAuth Web com o callback de testes, a audiência **Externa /
+Testando**, um utilizador de teste e o consentimento para `gmail.send`.
+No ConnectBot foi observado `COFRE_OK` para o ficheiro privado
+`/root/project-secrets/fadego-gmail/oauth.env`: isto confirma **apenas**
+que o ficheiro existe e não está vazio, não a validade do Client Secret ou
+o sucesso do intercâmbio OAuth. Não copiar o seu conteúdo para GitHub ou chat.
+Nenhum envio real, consentimento OAuth na aplicação, merge ou deploy foi provado.
+
+O email de suporte escolhido no Google Auth Platform **pode aparecer ao dono
+da barbearia no ecrã de consentimento da Google**, mas não é um contacto
+exposto no catálogo público de reservas e nunca é usado como remetente
+das mensagens de outra barbearia.
+
+O código contém dois transportes separados: Gmail autorizado por tenant e
+remetente sob domínio FADEGO verificado (provider transacional). **Hoje a
+variável global `BOOKING_EMAIL_PROVIDER` seleciona apenas um transporte de
+cada vez**; a escolha simultânea por barbearia, a compra/validação do domínio,
+o serviço de envio e o DNS continuam pendentes de autorização e implementação.
+Um subdomínio não oferece automaticamente uma caixa de correio.
+Enquanto isso, a interface mostra ambas as possibilidades sem as apresentar
+como serviços ativos e as portas de envio continuam fechadas por defeito.

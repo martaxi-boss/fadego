@@ -3,6 +3,7 @@ import ConfigNotice from "@/app/_components/config-notice"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
 import { gmailOAuthConfig, gmailLiveSendReady } from "@/lib/gmail-oauth"
+import { bookingEmailProviderReady } from "@/lib/booking-email"
 import { connectGmailAction, activateGmailAction, pauseGmailAction, disconnectGmailAction } from "../gmail-actions"
 import { updateBarbershopContactEmailAction } from "../actions"
 
@@ -28,22 +29,33 @@ export default async function BarbershopContactPage({
   })
   const oauthReady = gmailOAuthConfig() !== null
   const liveGmailReady = gmailLiveSendReady()
+  const platformSendingReady = process.env.BOOKING_EMAIL_PROVIDER === "resend" && bookingEmailProviderReady()
   const notice = typeof query.notice === "string" ? query.notice : ""
 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold">Email da barbearia</h1>
+        <h1 className="text-2xl font-semibold">Emails das reservas</h1>
         <p className="mt-3 text-sm leading-7 text-gray-600">
-          A tua barbearia escolhe um nome de endereço FADEGO para enviar
-          confirmações aos clientes. Podes também usar o teu Gmail ou outro
-          email de contacto para receber as respostas. Para enviar diretamente
-          através de uma conta externa, será necessário ligá-la e autorizar o
-          acesso. O envio real permanece desativado até à ativação aprovada.
+          A tua barbearia pode preparar um endereço de envio FADEGO, associado
+          ao domínio verificado da plataforma, ou ligar o seu próprio Gmail.
+          São opções distintas: indicar um email de contacto não autoriza envios.
+          O envio real depende da configuração e da aprovação da plataforma.
         </p>
       </section>
       <ConfigNotice notice={notice} />
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold">Opção 1 — endereço de envio FADEGO</h2>
+        <p className="mt-2 text-sm leading-7 text-gray-600">
+          Este endereço usa o domínio verificado do FADEGO quando o serviço de envio
+          estiver aprovado. Não cria uma caixa de correio nem tem um custo individual
+          automático por barbearia. As respostas seguem para o email de contacto.
+        </p>
+        <p className="mt-3 text-sm font-medium text-gray-700" role="status">
+          {platformSendingReady
+            ? "Estado: serviço de envio do domínio configurado."
+            : "Estado: envio pelo domínio ainda indisponível nesta instalação."}
+        </p>
         <form action={updateBarbershopContactEmailAction.bind(null, access.barbershop.slug)}
           className="max-w-xl space-y-4">
           <label className="block text-sm font-medium text-gray-800">
@@ -92,12 +104,17 @@ export default async function BarbershopContactPage({
         </form>
       </section>
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Envio pelo meu Gmail</h2>
+        <h2 className="text-lg font-semibold">Opção 2 — Gmail próprio da barbearia</h2>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-gray-600">
           Liga a tua conta pela página oficial da Google. O FADEGO pede apenas
           autorização para enviar mensagens com o Gmail e identificar a conta.
           Não lê emails, não pede a palavra-passe e não ativa os envios
           automaticamente depois da ligação.
+        </p>
+        <p className="mt-2 text-xs leading-6 text-gray-600">
+          O email de apoio do FADEGO pode aparecer na autorização da Google
+          dirigida ao dono da barbearia. Não é mostrado aos clientes na página
+          pública de reservas e não será usado como remetente da barbearia.
         </p>
         <p className="mt-3 text-sm font-semibold">
           {gmail ? "Conta ligada: " + gmail.email : "Nenhuma conta Gmail ligada."}

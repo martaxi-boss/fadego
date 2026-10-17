@@ -15,12 +15,22 @@ const messages: Record<string, string> = {
   "rate-limit":
     "Foram feitas demasiadas alterações num curto período. Tenta novamente dentro de instantes.",
   "write-failed": "Não foi possível guardar a alteração.",
+  "gmail-unavailable": "Ligação Gmail ou autorização global ainda não configurada.",
+  "gmail-invalid": "Pedido de ligação Gmail inválido ou expirado. Inicia novamente.",
+  "gmail-cancelled": "Ligação Gmail cancelada. Nada foi autorizado.",
+  "gmail-failed": "Não foi possível confirmar a ligação Gmail. Nenhuma mensagem foi enviada.",
+  "gmail-connected": "Gmail ligado com sucesso. O envio automático continua desativado.",
+  "gmail-not-connected": "Não existe uma ligação Gmail pronta para ativar.",
+  "gmail-confirmation-required": "Confirma expressamente a autorização de envio.",
+  "gmail-activated": "Envio pelo Gmail autorizado nesta barbearia.",
+  "gmail-paused": "Envio pelo Gmail pausado.",
+  "gmail-disconnected": "Ligação Gmail removida do FADEGO.",
 }
 
 export default function ConfigNotice({ notice }: { notice?: string }) {
   if (!notice || !(notice in messages)) return null
 
-  const success = notice === "saved"
+  const success = ["saved", "gmail-connected", "gmail-activated", "gmail-paused", "gmail-disconnected"].includes(notice)
 
   return (
     <p

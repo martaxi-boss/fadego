@@ -2,6 +2,8 @@ import { notFound } from "next/navigation"
 import ConfigNotice from "@/app/_components/config-notice"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
+import { gmailOAuthConfig, gmailLiveSendReady } from "@/lib/gmail-oauth"
+import { connectGmailAction, activateGmailAction, pauseGmailAction, disconnectGmailAction } from "../gmail-actions"
 import { updateBarbershopContactEmailAction } from "../actions"
 
 export default async function BarbershopContactPage({
@@ -20,6 +22,12 @@ export default async function BarbershopContactPage({
     select: { contactEmail: true, senderAlias: true },
   })
   if (!shop) notFound()
+  const gmail = await db.gmailSenderConnection.findUnique({
+    where: { barbershopId: access.barbershop.id },
+    select: { email: true, sendingEnabledAt: true },
+  })
+  const oauthReady = gmailOAuthConfig() !== null
+  const liveGmailReady = gmailLiveSendReady()
   const notice = typeof query.notice === "string" ? query.notice : ""
 
   return (
@@ -82,6 +90,77 @@ export default async function BarbershopContactPage({
           <button className="rounded-lg bg-gray-950 px-5 py-3 text-sm font-semibold text-white"
             type="submit">Guardar email</button>
         </form>
+      </section>
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold">Envio pelo meu Gmail</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-7 text-gray-600">
+          Liga a tua conta pela página oficial da Google. O FADEGO pede apenas
+          autorização para enviar mensagens com o Gmail e identificar a conta.
+          Não lê emails, não pede a palavra-passe e não ativa os envios
+          automaticamente depois da ligação.
+        </p>
+        <p className="mt-3 text-sm font-semibold">
+          {gmail ? "Conta ligada: " + gmail.email : "Nenhuma conta Gmail ligada."}
+        </p>
+        <p className="mt-1 text-sm text-gray-600">
+          {!gmail ? "Estado: por configurar." : gmail.sendingEnabledAt
+            ? "Estado: envio autorizado nesta barbearia."
+            : "Estado: ligada, mas envios automáticos desativados."}
+        </p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          {oauthReady ? (
+            <form action={connectGmailAction.bind(null, access.barbershop.slug)}>
+              <button type="submit"
+                className="rounded-lg bg-gray-950 px-5 py-3 text-sm font-semibold text-white">
+                {gmail ? "Ligar outro Gmail" : "Ligar o meu Gmail com a Google"}
+              </button>
+            </form>
+          ) : (
+            <p className="text-sm text-amber-800">
+              Ligação Google ainda indisponível: falta configurar o cliente OAuth
+              e o cofre de segredos num ambiente HTTPS aprovado.
+            </p>
+          )}
+          {gmail ? (
+            <form action={disconnectGmailAction.bind(null, access.barbershop.slug)}>
+              <button type="submit" className="rounded-lg border border-gray-300 px-5 py-3 text-sm">
+                Desligar Gmail
+              </button>
+            </form>
+          ) : null}
+        </div>
+        {gmail && liveGmailReady ? (
+          gmail.sendingEnabledAt ? (
+            <form className="mt-5" action={pauseGmailAction.bind(null, access.barbershop.slug)}>
+              <button type="submit" className="rounded-lg border border-red-300 px-5 py-3 text-sm">
+                Pausar envios pelo Gmail
+              </button>
+            </form>
+          ) : (
+            <form className="mt-5 space-y-3"
+              action={activateGmailAction.bind(null, access.barbershop.slug)}>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="confirmGmailSending" value="authorize"
+                  required className="mt-1" />
+                Confirmo que sou o titular autorizado e quero ativar o envio
+                de confirmações pelo Gmail desta barbearia.
+              </label>
+              <button type="submit"
+                className="rounded-lg bg-gray-950 px-5 py-3 text-sm font-semibold text-white">
+                Autorizar envio de reservas pelo Gmail
+              </button>
+            </form>
+          )
+        ) : (
+          <p className="mt-4 text-sm text-amber-800">
+            O envio real continua bloqueado pela plataforma. Não serão
+            enviados emails durante a preparação nem ao concluir o OAuth.
+          </p>
+        )}
+        <p className="mt-4 text-xs leading-6 text-gray-500">
+          Se desligares a conta, o FADEGO apaga localmente a credencial de acesso.
+          Podes também revogar a permissão na página de segurança da tua Conta Google.
+        </p>
       </section>
     </div>
   )

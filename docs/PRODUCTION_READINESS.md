@@ -24,7 +24,7 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [ ] Full API/dependency audit, performance, WCAG accessibility audit and load/stress certification
 - [x] Public booking requires customer email; encrypted confirmation outbox with automatic retries (code/CI)
 - [x] Tenant-specific contact mailbox plus self-service sender prefix under a FADEGO verified domain; OWNER/ADMIN edit, branded From and tenant Reply-To; CI-only (no real send)
-- [ ] Provider-approved real email sender, domain verification, live delivery proof, and opt-out policies for other notifications
+- [ ] Provider-approved real email sender, Google OAuth test credentials, consent, live delivery proof, and opt-out policies for other notifications
 - [x] Encrypted email events for customer cancellations and reschedules with same-transaction outbox and idempotent retries (code/CI)
 - [x] Expiring one-use customer booking-access recovery by verified email, phone and local date (code/CI)
 - [ ] More optional operational/marketing notifications, sender consent and approved policies
@@ -68,6 +68,8 @@ deployment exists without verifying it.
   currently sets `robots: noindex` pending launch approval.
 - Confirm administrative bootstrap/recovery and robust customer data isolation.
 
+- [x] Gmail OAuth send-only pilot integration coded: per-tenant one-time state and PKCE, encrypted refresh token, confirmed Google identity and separate explicit send gate (code/CI only; no real consent/send)
+
 ## Contact email for each barbershop
 
 Each tenant may configure `Barbershop.contactEmail` in `/admin/{slug}/contact` (OWNER/ADMIN only), including an existing Gmail or a test mailbox. Existing tenants retain a null value until configured. This address is a tenant **contact/Reply-To**, not permission to send email with an unverified sender domain. The platform sender stays on a verified FADEGO domain while the display name is the barbershop's name.
@@ -81,3 +83,15 @@ The contact address is included in the encrypted outbox snapshot for booking con
 - The encrypted outbox snapshots the shop slug and chosen sender prefix alongside the reply address, so queued confirmation, cancellation, rescheduling and recovery messages consistently keep their original sender even if settings later change. Outboxes created by earlier versions (missing those optional fields) still send with the legacy platform address. This is a sent-message snapshot, **not** a global state lookup at retry time.
 - An existing Gmail/Outlook/other mailbox can be the `Reply-To`, but cannot be made `From` by typing its address. Actual send-as through Gmail would require delegated Gmail API OAuth authorization with `gmail.send`, encrypted refresh-token persistence, safe token revocation and Google consent/review; a client-owned domain would require DNS/domain sender authentication. These credentials/consents are **not set up** and sending from outside the verified platform domain is **not supported or claimed live** in this commit.
 - Provider activation, production emails, SNS/SMS/WhatsApp, DNS, billing, real customer tests and merge remain behind the existing material authorization boundary. The name chosen by the barbershop under the FADEGO domain does not imply an inbox is hosted: replies use the separately configured contact mailbox.
+
+
+## Gmail test sender — only after individual Google consent and staging approval
+
+- The Gmail OAuth web server flow uses `openid email https://www.googleapis.com/auth/gmail.send`, a per-tenant, one-use database-backed state, PKCE S256, ten-minute expiry, FADEGO active user/membership verification, and Google-verified email/sub identity. No Gmail password or inbox-reading scope is requested. Google's `gmail.send` is **sensitive**, requiring an appropriate verification/review before offering it publicly.
+- Dedicated `GMAIL_TOKEN_ENCRYPTION_SECRET` stays only in the approved VPS secret vault; encrypted verifier and refresh-token values are stored separately with purpose-specific HKDF keys and AES-256-GCM. The new SQL migration does not change existing bookings. The Google OAuth client ID and secret are also vault-only.
+- Callback `https://fadego.duckdns.org/api/integrations/gmail/callback` is a **proposed test URI, not proof of an approved or reachable OAuth redirect**. Google Cloud Console must accept and register this exact URI, and HTTPS/staging must actually be operational. DuckDNS domain ownership/Google OAuth branding restrictions remain unverified.
+- A connected Gmail is **disabled for sending by default**. Enabling needs `BOOKING_EMAIL_PROVIDER=gmail`, `GMAIL_LIVE_SEND_ENABLED=true` (explicit approved deployment change) and a separate OWNER/ADMIN checkbox/action on the barbershop's Email page. Each new public booking checks the *individual tenant* Gmail status before accepting the booking.
+- When a send is allowed, the Gmail `From` is **exactly** the verified Google account mailbox. The former FADEGO branded-alias format applies **only** to platform-verified provider mode; Gmail cannot masquerade as `alias+slug@...` or another address. Replies can still use a different configured tenant mailbox.
+- The Gmail API has **no idempotency key** for `messages.send`. To avoid sending two copies containing the same private code, the worker records `GMAIL_SEND_ATTEMPTED` before dispatch. A crash/ambiguous response leads to `GMAIL_UNCERTAIN` and **no automatic resend**. The user must inspect Gmail Sent manually; actual delivery is not certified until the approved pilot. A provider refusal can be retried.
+- Only synthetic customer records may be used without external authority. A real Gmail test needs: Google Cloud OAuth consent configuration (testing audience includes owner Google address), selected owner’s Google consent, explicit Supervisor-approved isolated HTTPS staging and vault setup, a deliberate FADEGO send activation, and a separately authorized test booking to an address the owner controls. An OAuth app still in Testing can have refresh tokens expiring after seven days; do not declare production readiness.
+- The entire code change deliberately stops **before merge, deployment, DNS, API credentials, OAuth consent and actual message dispatch**.

@@ -1,7 +1,7 @@
 import { createPublicBooking } from "@/lib/public-booking"
 import { sourceIpFromHeaders } from "@/lib/request-context"
 import { asJsonObject, readBoundedJsonObject } from "@/lib/http-json"
-import { bookingEmailProviderReady, deliverBookingEmail } from "@/lib/booking-email"
+import { bookingEmailReadyForTenant, deliverBookingEmail } from "@/lib/booking-email"
 
 const noStoreHeaders = {
   "Cache-Control": "no-store, max-age=0",
@@ -22,7 +22,7 @@ export async function POST(
   const body = parsedBody.value
   // Do not accept an appointment when we cannot even attempt confirmation.
   // The Owner must authorize/configure the mail provider in the VPS vault.
-  if (!bookingEmailProviderReady()) {
+  if (!(await bookingEmailReadyForTenant(slug))) {
     return Response.json({ ok: false, code: "EMAIL_UNAVAILABLE" }, {
       status: 503,
       headers: noStoreHeaders,

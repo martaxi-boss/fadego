@@ -72,6 +72,8 @@ model User {
   active       Boolean            @default(true)
   memberships  BarbershopMember[]
   staffMembers StaffMember[]
+  gmailOAuthAttempts GmailOAuthAttempt[]
+  gmailAuthorizations GmailSenderConnection[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 }
@@ -97,6 +99,8 @@ model Barbershop {
   customers              Customer[]
   bookings               Booking[]
   bookingAccessTokens    BookingAccessToken[]
+  gmailOAuthAttempts     GmailOAuthAttempt[]
+  gmailSenderConnection  GmailSenderConnection?
   membershipPlans        MembershipPlan[]
   membershipPlanServices MembershipPlanService[]
   memberships            Membership[]
@@ -301,6 +305,39 @@ model BookingEmailOutbox {
   @@index([barbershopId, bookingId])
   @@index([acceptedAt, nextAttemptAt])
   @@index([leaseUntil])
+}
+
+
+model GmailOAuthAttempt {
+  stateHash       String    @id @db.VarChar(64)
+  barbershopId    String
+  userId          String
+  sealedVerifier  String    @db.Text
+  expiresAt       DateTime  @db.Timestamptz(3)
+  usedAt          DateTime? @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([barbershopId, expiresAt])
+  @@index([userId, expiresAt])
+}
+
+model GmailSenderConnection {
+  barbershopId        String   @id
+  email               String   @db.VarChar(254)
+  googleSubject       String   @db.VarChar(255)
+  sealedRefreshToken  String   @db.Text
+  authorizedByUserId  String
+  sendingEnabledAt    DateTime? @db.Timestamptz(3)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  barbershop  Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  authorizedBy User @relation(fields: [authorizedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([authorizedByUserId])
 }
 
 model MembershipPlan {

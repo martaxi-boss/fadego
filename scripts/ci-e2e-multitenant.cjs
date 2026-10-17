@@ -107,6 +107,10 @@ async function main() {
     const shopEmail = owner.locator('input[name="contactEmail"]')
     const senderAlias = owner.locator('input[name="senderAlias"]')
     assert.equal(await shopEmail.inputValue(), "shop-a@example.test")
+    assert.equal(await owner.getByText("Ligação Google ainda indisponível", { exact: false }).count(), 1,
+      "Gmail link remains closed until Google OAuth credentials are configured")
+    assert.equal(await owner.getByRole("button", { name: "Ligar o meu Gmail com a Google" }).count(), 0,
+      "No active Gmail OAuth action before explicit platform setup")
     assert.equal(await senderAlias.inputValue(), "")
     await shopEmail.fill("owner-test-inbox@example.test")
     await senderAlias.fill("cortes")

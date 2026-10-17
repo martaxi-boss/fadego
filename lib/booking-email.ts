@@ -5,6 +5,8 @@ import {
   type BookingEmailPayload,
 } from "@/lib/booking-email-crypto"
 import { bookingAccessPath } from "@/lib/booking-access"
+import { gmailLiveSendReady } from "@/lib/gmail-oauth"
+import { gmailTenantReady, sendAuthorizedGmailBooking } from "@/lib/gmail-delivery"
 
 // Explicitly opt in to one vetted transactional provider. This module cannot
 // send emails without the Owner-approved credentials from the VPS vault.
@@ -25,6 +27,10 @@ export const bookingEmailProviderReady = (env: BookingEmailEnvironment = process
   const from = env.BOOKING_EMAIL_FROM?.trim() || ""
   const origin = env.NEXTAUTH_URL?.trim() || ""
   const key = env.BOOKING_EMAIL_API_KEY || ""
+  if (env.BOOKING_EMAIL_PROVIDER === "gmail") {
+    return gmailLiveSendReady(env) && !!env.NEXTAUTH_SECRET &&
+      Buffer.byteLength(env.NEXTAUTH_SECRET) >= 32
+  }
   if (env.BOOKING_EMAIL_PROVIDER !== "resend" || key.length < 16) return false
   if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(from)) return false
   if (!env.NEXTAUTH_SECRET || Buffer.byteLength(env.NEXTAUTH_SECRET) < 32) return false
@@ -37,6 +43,11 @@ export const bookingEmailProviderReady = (env: BookingEmailEnvironment = process
     return false
   }
 }
+
+export const bookingEmailReadyForTenant = async (slug: string) =>
+  process.env.BOOKING_EMAIL_PROVIDER === "gmail"
+    ? gmailTenantReady(slug)
+    : bookingEmailProviderReady()
 
 const line = (value: string) => value
   .replace(/[\r\n\t\x00-\x1f\x7f]+/g, " ")
@@ -74,6 +85,7 @@ export const bookingConfirmationMessage = (
   payload: BookingEmailPayload,
   origin: string,
   from: string,
+  authorizedGmail = false,
 ) => {
   const when = new Date(payload.startsAt)
   const humanTime = new Intl.DateTimeFormat("pt-PT", {
@@ -85,7 +97,7 @@ export const bookingConfirmationMessage = (
   // Sender domain remains verified/central; tenant controls only display and reply.
   const senderName = line(payload.barbershopName)
     .replace(/[^A-Za-zÀ-ÿ0-9 .&'-]/g, " ").trim().slice(0, 80) || "FADEGO"
-  const brandedFrom = senderName + " <" + resolveTenantSenderAddress(payload, from) + ">"
+  const brandedFrom = senderName + " <" + (authorizedGmail ? from : resolveTenantSenderAddress(payload, from)) + ">"
   const replyTo = payload.barbershopContactEmail
   const kind = payload.kind ?? "CONFIRMATION"
   if (kind === "RECOVERY") {
@@ -205,6 +217,7 @@ export const deliverBookingEmail = async (
   options: { transport?: BookingEmailTransport; now?: () => Date } = {},
 ): Promise<"accepted" | "pending"> => {
   const transport = options.transport ?? sendWithResend
+  const usingGmail = !options.transport && process.env.BOOKING_EMAIL_PROVIDER === "gmail"
   if (!options.transport && !bookingEmailProviderReady()) return "pending"
 
   const now = options.now?.() ?? new Date()
@@ -223,9 +236,23 @@ export const deliverBookingEmail = async (
 
   const job = await db.bookingEmailOutbox.findUnique({
     where: { id: jobId },
-    select: { sealedPayload: true, attemptCount: true, kind: true, recoveryExpiresAt: true },
+    select: { sealedPayload: true, attemptCount: true, kind: true, recoveryExpiresAt: true,
+      barbershopId: true, createdAt: true, lastErrorCode: true },
   })
   if (!job) return "pending"
+
+  // A crash after Gmail accepted a request cannot be replayed as a new send.
+  // The Gmail API has no equivalent of Resend's idempotency key.
+  if (usingGmail && job.lastErrorCode === "GMAIL_SEND_ATTEMPTED") {
+    await db.bookingEmailOutbox.updateMany({
+      where: { id: jobId, leaseUntil: lease, acceptedAt: null },
+      data: {
+        discardedAt: now, leaseUntil: null,
+        lastErrorCode: "GMAIL_UNCERTAIN", sealedPayload: "",
+      },
+    })
+    return "pending"
+  }
 
   // Expired recovery emails are discarded rather than delivered too late.
   if (job.kind === "RECOVERY" && (!job.recoveryExpiresAt || job.recoveryExpiresAt <= now)) {
@@ -245,13 +272,43 @@ export const deliverBookingEmail = async (
   let errorCode = "PROVIDER_UNAVAILABLE"
   try {
     const payload = openBookingEmail(job.sealedPayload)
-    const message = bookingConfirmationMessage(
-      payload,
-      process.env.NEXTAUTH_URL || "https://fadego.duckdns.org",
-      process.env.BOOKING_EMAIL_FROM || "not-configured@example.invalid",
-    )
-    sent = await transport(message, jobId)
-    if (!sent) errorCode = "PROVIDER_REFUSED"
+    const origin = process.env.NEXTAUTH_URL || "https://fadego.duckdns.org"
+    if (usingGmail) {
+      const outcome = await sendAuthorizedGmailBooking(
+        { barbershopId: job.barbershopId, createdAt: job.createdAt },
+        (authorizedSender) => bookingConfirmationMessage(
+          payload, origin, authorizedSender, true,
+        ),
+        async () => {
+          // Write-ahead attempt record. No Gmail network request before this
+          // succeeds. If the process crashes, old jobs are NOT resent.
+          const updated = await db.bookingEmailOutbox.updateMany({
+            where: { id: jobId, leaseUntil: lease, acceptedAt: null },
+            data: { lastErrorCode: "GMAIL_SEND_ATTEMPTED" },
+          })
+          return updated.count === 1
+        },
+      )
+      if (outcome === "disabled" || outcome === "uncertain") {
+        await db.bookingEmailOutbox.updateMany({
+          where: { id: jobId, leaseUntil: lease, acceptedAt: null },
+          data: {
+            discardedAt: now, leaseUntil: null, sealedPayload: "",
+            lastErrorCode: outcome === "disabled" ? "GMAIL_NOT_AUTHORIZED" : "GMAIL_UNCERTAIN",
+          },
+        })
+        return "pending"
+      }
+      sent = outcome === "accepted"
+      if (!sent) errorCode = "GMAIL_REFUSED"
+    } else {
+      const message = bookingConfirmationMessage(
+        payload, origin,
+        process.env.BOOKING_EMAIL_FROM || "not-configured@example.invalid",
+      )
+      sent = await transport(message, jobId)
+      if (!sent) errorCode = "PROVIDER_REFUSED"
+    }
   } catch {
     errorCode = "NOTIFICATION_CONFIG_ERROR"
   }

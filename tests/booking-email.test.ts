@@ -11,7 +11,7 @@ import {
 } from "@/lib/booking-email"
 
 const secret = "test-only-no-real-credential-" + "Q".repeat(40)
-const payload: BookingEmailPayload = {
+const payload: BookingEmailPayload & { accessCode: string } = {
   email: "cliente@example.test",
   customerName: "João de Teste",
   barbershopName: "Atelier Barbeiro",

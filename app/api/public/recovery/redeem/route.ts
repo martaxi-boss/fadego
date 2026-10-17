@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const parsed = await readBoundedJsonObject(request)
   if (!parsed.ok) {
     return Response.json({ ok: false, code: "UNAVAILABLE" }, {
-      status: 400, headers,
+      status: parsed.status, headers,
     })
   }
   const token = parsed.value.token

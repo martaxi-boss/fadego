@@ -48,4 +48,36 @@ assert.match(
   "private booking pages must not forward bearer URLs via referrer",
 )
 
-console.log("FADEGO runtime HTTP smoke PASS: /, /login, /admin, /r/<invalid>")
+
+// Private recovery mutations must not echo access tokens and must reject
+// oversized JSON with 413, not misreport it as an ordinary invalid token.
+const recoveryEndpoint = origin + "/api/public/recovery/redeem"
+async function postRecovery(body) {
+  return fetch(recoveryEndpoint, {
+    method: "POST",
+    redirect: "manual",
+    signal: AbortSignal.timeout(8000),
+    headers: { "Content-Type": "application/json" },
+    body,
+  })
+}
+
+const invalidRecovery = await postRecovery("{invalid-json")
+assert.equal(invalidRecovery.status, 400, "invalid recovery JSON must return 400")
+assert.match(
+  invalidRecovery.headers.get("cache-control") ?? "",
+  /no-store/i,
+  "recovery HTTP responses must not be cached",
+)
+assert.equal(invalidRecovery.headers.get("referrer-policy"), "no-referrer")
+assert.deepEqual(await invalidRecovery.json(), { ok: false, code: "UNAVAILABLE" })
+
+const oversizedRecovery = await postRecovery(
+  JSON.stringify({ token: "x".repeat(8192) }),
+)
+assert.equal(oversizedRecovery.status, 413, "oversized recovery JSON must return 413")
+assert.match(oversizedRecovery.headers.get("cache-control") ?? "", /no-store/i)
+assert.equal(oversizedRecovery.headers.get("referrer-policy"), "no-referrer")
+assert.deepEqual(await oversizedRecovery.json(), { ok: false, code: "UNAVAILABLE" })
+
+console.log("FADEGO runtime HTTP smoke PASS: /, /login, /admin, /r/<invalid>, recovery HTTP bounds")

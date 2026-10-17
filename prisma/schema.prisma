@@ -283,6 +283,9 @@ model BookingEmailOutbox {
   bookingId     String
   kind          String    @default("CONFIRMATION") @db.VarChar(20)
   sealedPayload String    @db.Text
+  recoveryTokenHash String? @unique @db.VarChar(64)
+  recoveryExpiresAt DateTime? @db.Timestamptz(3)
+  recoveryRedeemedAt DateTime? @db.Timestamptz(3)
   attemptCount  Int       @default(0)
   nextAttemptAt DateTime  @default(now()) @db.Timestamptz(3)
   leaseUntil    DateTime? @db.Timestamptz(3)

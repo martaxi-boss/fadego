@@ -3,7 +3,6 @@ import ConfigNotice from "@/app/_components/config-notice"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
 import { gmailOAuthConfig, gmailLiveSendReady } from "@/lib/gmail-oauth"
-import { bookingEmailProviderReady } from "@/lib/booking-email"
 import { connectGmailAction, activateGmailAction, pauseGmailAction, disconnectGmailAction } from "../gmail-actions"
 import { updateBarbershopContactEmailAction } from "../actions"
 
@@ -20,7 +19,7 @@ export default async function BarbershopContactPage({
   if (access.membership.role === "STAFF") notFound()
   const shop = await db.barbershop.findUnique({
     where: { id: access.barbershop.id },
-    select: { contactEmail: true, senderAlias: true },
+    select: { contactEmail: true },
   })
   if (!shop) notFound()
   const gmail = await db.gmailSenderConnection.findUnique({
@@ -29,87 +28,33 @@ export default async function BarbershopContactPage({
   })
   const oauthReady = gmailOAuthConfig() !== null
   const liveGmailReady = gmailLiveSendReady()
-  const platformSendingReady = process.env.BOOKING_EMAIL_PROVIDER === "resend" && bookingEmailProviderReady()
   const notice = typeof query.notice === "string" ? query.notice : ""
 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold">Emails das reservas</h1>
+        <h1 className="text-2xl font-semibold">Gmail das reservas</h1>
         <p className="mt-3 text-sm leading-7 text-gray-600">
-          A tua barbearia pode preparar um endereço de envio FADEGO, associado
-          ao domínio verificado da plataforma, ou ligar o seu próprio Gmail.
-          São opções distintas: indicar um email de contacto não autoriza envios.
-          O envio real depende da configuração e da aprovação da plataforma.
+          Para receber reservas pelo FADEGO, cada barbearia precisa de ligar
+          o Gmail do seu próprio negócio. Se ainda não tiver Gmail, pode criar
+          uma conta e ligá-la aqui. Não são necessárias caixas de email dos
+          subdomínios FADEGO nem acesso ao Gmail pessoal da administração.
+        </p>
+        <p className="mt-2 text-sm leading-7 text-gray-600">
+          Os clientes da barbearia não ligam contas Google: apenas indicam o
+          seu endereço de email para receber a confirmação e o link privado
+          que permite consultar, alterar ou cancelar a reserva.
         </p>
       </section>
       <ConfigNotice notice={notice} />
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Opção 1 — endereço de envio FADEGO</h2>
-        <p className="mt-2 text-sm leading-7 text-gray-600">
-          Este endereço usa o domínio verificado do FADEGO quando o serviço de envio
-          estiver aprovado. Não cria uma caixa de correio nem tem um custo individual
-          automático por barbearia. As respostas seguem para o email de contacto.
-        </p>
-        <p className="mt-3 text-sm font-medium text-gray-700" role="status">
-          {platformSendingReady
-            ? "Estado: serviço de envio do domínio configurado."
-            : "Estado: envio pelo domínio ainda indisponível nesta instalação."}
-        </p>
-        <form action={updateBarbershopContactEmailAction.bind(null, access.barbershop.slug)}
-          className="max-w-xl space-y-4">
-          <label className="block text-sm font-medium text-gray-800">
-            Email de contacto
-            <input
-              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-3"
-              name="contactEmail"
-              type="email"
-              autoComplete="email"
-              maxLength={254}
-              placeholder="barbearia@exemplo.pt"
-              defaultValue={shop.contactEmail ?? ""}
-            />
-          </label>
-          <p className="text-xs leading-6 text-gray-600">
-            Para testes, podes indicar um email teu. O contacto receberá as
-            respostas dos clientes, não os códigos privados das reservas.
-          </p>
-          <label className="block text-sm font-medium text-gray-800">
-            Nome escolhido para o email de envio FADEGO
-            <input
-              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-3"
-              name="senderAlias"
-              autoComplete="off"
-              maxLength={32}
-              pattern="[a-zA-Z0-9][a-zA-Z0-9-]*"
-              title="Letras, números e hífen"
-              placeholder="reservas"
-              defaultValue={shop.senderAlias ?? ""}
-            />
-          </label>
-          <p className="text-xs leading-6 text-gray-600">
-            Exemplo: se escolheres «cortes», será utilizado o prefixo «cortes»
-            seguido do identificador da barbearia e do domínio verificado do
-            FADEGO. Assim, cada barbearia tem um endereço próprio e as
-            respostas vão para o email de contacto indicado acima.
-            Deixa vazio para usar «reservas».
-          </p>
-          <p className="text-xs leading-6 text-gray-600">
-            Um endereço externo, como o Gmail, só poderá ser usado
-            diretamente como remetente depois de o titular autorizar essa conta.
-            Não pedimos a palavra-passe da caixa de correio.
-          </p>
-          <button className="rounded-lg bg-gray-950 px-5 py-3 text-sm font-semibold text-white"
-            type="submit">Guardar email</button>
-        </form>
-      </section>
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Opção 2 — Gmail próprio da barbearia</h2>
+        <h2 className="text-lg font-semibold">Ligar o Gmail do negócio</h2>
         <p className="mt-2 max-w-2xl text-sm leading-7 text-gray-600">
-          Liga a tua conta pela página oficial da Google. O FADEGO pede apenas
-          autorização para enviar mensagens com o Gmail e identificar a conta.
-          Não lê emails, não pede a palavra-passe e não ativa os envios
-          automaticamente depois da ligação.
+          Liga o Gmail que pertence à tua barbearia através da página oficial
+          da Google. Esta é a única ligação de envio disponível no FADEGO.
+          A Google autoriza apenas o envio de mensagens e a identificação
+          da conta: não lemos a caixa de correio nem pedimos a palavra-passe.
+          A ligação por si só não ativa os envios.
         </p>
         <p className="mt-2 text-xs leading-6 text-gray-600">
           O email de apoio do FADEGO pode aparecer na autorização da Google
@@ -120,16 +65,20 @@ export default async function BarbershopContactPage({
           {gmail ? "Conta ligada: " + gmail.email : "Nenhuma conta Gmail ligada."}
         </p>
         <p className="mt-1 text-sm text-gray-600">
-          {!gmail ? "Estado: por configurar." : gmail.sendingEnabledAt
-            ? "Estado: envio autorizado nesta barbearia."
-            : "Estado: ligada, mas envios automáticos desativados."}
+          {!gmail
+            ? "Estado: Gmail do negócio por ligar."
+            : gmail.sendingEnabledAt && liveGmailReady
+              ? "Estado: envio autorizado nesta barbearia."
+              : gmail.sendingEnabledAt
+                ? "Estado: ligação autorizada, mas o envio está bloqueado na plataforma."
+                : "Estado: Gmail ligado, mas envios automáticos desativados."}
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           {oauthReady ? (
             <form action={connectGmailAction.bind(null, access.barbershop.slug)}>
               <button type="submit"
                 className="rounded-lg bg-gray-950 px-5 py-3 text-sm font-semibold text-white">
-                {gmail ? "Ligar outro Gmail" : "Ligar o meu Gmail com a Google"}
+                {gmail ? "Mudar Gmail do negócio" : "Ligar o Gmail do negócio com a Google"}
               </button>
             </form>
           ) : (
@@ -178,6 +127,36 @@ export default async function BarbershopContactPage({
           Se desligares a conta, o FADEGO apaga localmente a credencial de acesso.
           Podes também revogar a permissão na página de segurança da tua Conta Google.
         </p>
+      </section>
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold">Email para receber respostas (opcional)</h2>
+        <p className="mt-2 text-sm leading-7 text-gray-600">
+          Se deixares este campo vazio, as respostas vão para o Gmail que ligaste.
+          Só precisas de o preencher se quiseres receber respostas noutro endereço.
+          Este campo não liga outro fornecedor de envio e não altera a conta Gmail
+          que envia as confirmações.
+        </p>
+        <form action={updateBarbershopContactEmailAction.bind(null, access.barbershop.slug)}
+          className="mt-4 max-w-xl space-y-4">
+          <label className="block text-sm font-medium text-gray-800">
+            Email para respostas
+            <input
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-3"
+              name="contactEmail"
+              type="email"
+              autoComplete="email"
+              maxLength={254}
+              placeholder="barbearia@gmail.com"
+              defaultValue={shop.contactEmail ?? ""}
+            />
+          </label>
+          <p className="text-xs leading-6 text-gray-600">
+            Os links privados e códigos das reservas são enviados só ao cliente,
+            não para este endereço de contacto.
+          </p>
+          <button className="rounded-lg bg-gray-950 px-5 py-3 text-sm font-semibold text-white"
+            type="submit">Guardar email para respostas</button>
+        </form>
       </section>
     </div>
   )

@@ -104,3 +104,27 @@ Supervisor, alteração explicitamente aprovada das portas globais, ligação
 OAuth pessoal no FADEGO e consentimento da barbearia; a mera leitura do
 cofre não concede autorização de envio. Nem estas alterações nem os
 ensaios CI instalam unidades systemd ou abrem portas no servidor.
+
+## Regra comercial atual — apenas Gmail por barbearia
+
+Cada negócio é obrigado a possuir/criar o **seu próprio Gmail**, que
+liga no painel por OAuth da Google. A conta de apoio do FADEGO fica
+exclusivamente para administração, teste e contacto no consentimento
+Google; **não envia reservas em nome de todos os parceiros**.
+Não há integrações Outlook, SMTP de terceiros ou caixas de email pagas
+dos subdomínios. O subdomínio é endereço web do negócio.
+
+O cliente final **não autoriza o Google**: introduz o email obrigatório
+para receber reserva, link privado, alterações, cancelamentos e recuperação.
+O contacto de respostas é opcional: se vazio, as respostas seguem para
+o Gmail autorizado; se preenchido, apenas define Reply-To, sem ativar
+nenhum fornecedor adicional.
+
+O painel de teste mostra **apenas Gmail** e as respostas opcionais.
+O alias antigo para o domínio de envio da plataforma mantém-se
+guardado na base de dados, mas desaparece do painel e não é apagado
+ao editar o contacto. Quando o Owner decidir ativar o email de domínio
+mais tarde, a migração será tratada separadamente sem recomeçar o OAuth.
+Para utilização por parceiros fora dos testadores, a publicação e
+verificação da aplicação OAuth Google ainda são necessárias.
+Os envios reais continuam fechados em desenvolvimento.

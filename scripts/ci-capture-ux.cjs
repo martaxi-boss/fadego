@@ -58,7 +58,7 @@ async function main() {
     await capture(d, "/admin/atelier-fadego-demo/agenda?date=2030-05-20", "05-agenda-desktop.jpg", "Agenda — Computador")
     await capture(d, "/admin/atelier-fadego-demo/customers", "06-clientes-desktop.jpg", "Clientes — Computador")
     await capture(d, "/admin/atelier-fadego-demo/club", "07-club-desktop.jpg", "Club — Computador")
-    await capture(d, "/admin/atelier-fadego-demo/contact", "17-email-desktop.jpg", "Email Gmail e domínio — Computador")
+    await capture(d, "/admin/atelier-fadego-demo/contact", "17-email-desktop.jpg", "Gmail do negócio — Computador")
     await capture(d, "/super-admin", "08-superadmin-desktop.jpg", "Super Admin — Computador")
 
     const mobile = await browser.newContext({
@@ -73,7 +73,7 @@ async function main() {
     await authenticate(m)
     await capture(m, "/admin/atelier-fadego-demo", "11-painel-mobile.jpg", "Painel da barbearia — Telemóvel")
     await capture(m, "/admin/atelier-fadego-demo/agenda?date=2030-05-20", "12-agenda-mobile.jpg", "Agenda — Telemóvel")
-    await capture(m, "/admin/atelier-fadego-demo/contact", "18-email-mobile.jpg", "Email Gmail e domínio — Telemóvel")
+    await capture(m, "/admin/atelier-fadego-demo/contact", "18-email-mobile.jpg", "Gmail do negócio — Telemóvel")
     await desktop.close()
     await mobile.close()
   } finally {

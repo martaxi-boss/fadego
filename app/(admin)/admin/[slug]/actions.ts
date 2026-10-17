@@ -356,14 +356,20 @@ export async function saveOpeningHourAction(
 export async function updateBarbershopContactEmailAction(rawSlug: string, formData: FormData) {
   const access = await requireWriteAccess(rawSlug, "contact")
   const parsed = barbershopContactEmailSchema.safeParse(formText(formData, "contactEmail"))
-  const senderAlias = barbershopSenderAliasSchema.safeParse(formText(formData, "senderAlias"))
-  if (!parsed.success || !senderAlias.success) {
+  // Contact-only Gmail form must preserve the alias stored for a future verified domain.
+  const senderAlias = formData.has("senderAlias")
+    ? barbershopSenderAliasSchema.safeParse(formText(formData, "senderAlias"))
+    : null
+  if (!parsed.success || (senderAlias && !senderAlias.success)) {
     redirectNotice(access.barbershop.slug, "contact", "invalid")
   }
+  const data = senderAlias && senderAlias.success
+    ? { contactEmail: parsed.data, senderAlias: senderAlias.data }
+    : { contactEmail: parsed.data }
   try {
     await db.barbershop.update({
       where: { id: access.barbershop.id },
-      data: { contactEmail: parsed.data, senderAlias: senderAlias.data },
+      data,
     })
   } catch (error) {
     handleWriteFailure(access.barbershop.slug, "contact", "update-contact-email", error)

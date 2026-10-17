@@ -273,8 +273,47 @@ automaticamente e o envio real **não está ativo**.
   que ainda carece de definição/aprovação; não apagar histórico existente
   arbitrariamente.
 
-**Importante:** os emails de aviso de remarcação/cancelamento e SMS são
-melhorias posteriores. Nesta etapa o email de **confirmação inicial**
-contém o link que permite ao cliente gerir a marcação a qualquer momento
-dentro das regras. Sem uma conta/remetente autorizados, apenas o
-código e os testes locais estão prontos, **não existe entrega real de emails**.
+**Atualização:** além da confirmação inicial, o FADEGO prepara agora emails
+individuais de **remarcação** (data anterior e nova data) e **cancelamento**.
+Cada aviso é criado na **mesma transação de alteração**, sem enviar
+emails dentro da transação. Os avisos são encriptados em repouso, cada um
+com idempotência própria, e mantêm o mesmo link privado.
+
+## Recuperação sem conta (implementação de código)
+
+O cliente que perdeu o link abre `/b/{slug}/recuperar`, indica o email,
+telefone e data local da reserva. Uma resposta pública **genérica** impede
+que terceiros descubram se determinado cliente tem marcações.
+
+- O serviço valida o tenant e identifica apenas uma reserva futura
+  compatível com o email, telefone e dia. Não revela nomes, números ou
+  confirmação de existência numa resposta pública.
+- Apenas com o remetente autorizado ativo se cria uma notificação
+  `RECOVERY`; o link usa um token aleatório de **256 bits**. O PostgreSQL
+  guarda só SHA-256 do token, com validade de **20 minutos**, sem acesso
+  aos dados pessoais da reserva. O token no email é encriptado até à
+  aceitação pelo fornecedor, quando o texto cifrado é apagado.
+- Abrir `/recuperar/{token}` não altera nem revoga qualquer acesso: o
+  cliente tem de carregar em **Recuperar acesso**. O servidor verifica que
+  a notificação foi aceite para envio, não expirou nem foi utilizada.
+- Depois de confirmada, a rotação do código privado e o consumo do token
+  de recuperação são feitos **na mesma transação PostgreSQL**, com o
+  bloqueio de tenant já usado no motor de reservas. Um segundo uso é
+  recusado; o link antigo só deixa de funcionar nesse momento.
+- As tentativas públicas de pedido e consumo de recuperação têm limites
+  próprios por IP/identidade, com chaves hashed. O Nginx de staging não
+  regista os URLs privados ou de recuperação, e as páginas têm
+  `noindex`, `no-referrer`, `no-store`.
+- Links de recuperação expirados não são enviados tardiamente:
+  o worker descarta a notificação e limpa o conteúdo cifrado.
+- As reservas antigas sem email mantêm o seu comportamento existente,
+  incluindo a gestão através do código, sem imposição retroativa de
+  contacto ou destruição do histórico.
+
+**Limites atuais:** o remetente transacional real não está configurado nem
+verificado; a aplicação não envia emails reais, nem está publicada na VPS.
+A recuperação destina-se a reservas futuras, com email válido. A aprovação
+do fornecedor, domínio e identidade do remetente, custos, regras RGPD,
+prova real de entrega e autorização do Supervisor continuam a ser
+Human Gates existentes. SMS e recuperação de password **administrativa**
+permanecem fora do âmbito deste fluxo de clientes.

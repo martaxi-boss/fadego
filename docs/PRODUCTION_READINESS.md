@@ -1,6 +1,6 @@
 # FADEGO — Production readiness and Human Gates
 
-Last reviewed: 2026-10-16. Source of truth: `martaxi-boss/fadego`.
+Last reviewed: 2026-10-17. Source of truth: `martaxi-boss/fadego`.
 This is a development readiness plan, **not proof of an active deployment**.
 
 ## Code-deliverable work without owner intervention
@@ -22,7 +22,9 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [ ] API audit, dependency audit, performance, accessibility and stress tests
 - [x] Public booking requires customer email; encrypted confirmation outbox with automatic retries (code/CI)
 - [ ] Provider-approved real email sender, domain verification, live delivery proof, and opt-out policies for other notifications
-- [ ] Further operational notifications (e.g. cancellations, remarcações), with approved policies
+- [x] Encrypted email events for customer cancellations and reschedules with same-transaction outbox and idempotent retries (code/CI)
+- [x] Expiring one-use customer booking-access recovery by verified email, phone and local date (code/CI)
+- [ ] More optional operational/marketing notifications, sender consent and approved policies
 - [x] One-time guarded SUPER_ADMIN bootstrap tool for a fresh database
 - [ ] Password recovery and approved provisioning/recovery for existing installations
 - [x] Ephemeral CI Postgres backup/restore rehearsal with synthetic tenant/customer data

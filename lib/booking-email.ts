@@ -178,6 +178,7 @@ export const deliverBookingEmail = async (
     where: {
       id: jobId,
       acceptedAt: null,
+      discardedAt: null,
       nextAttemptAt: { lte: now },
       OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }],
     },
@@ -187,9 +188,23 @@ export const deliverBookingEmail = async (
 
   const job = await db.bookingEmailOutbox.findUnique({
     where: { id: jobId },
-    select: { sealedPayload: true, attemptCount: true },
+    select: { sealedPayload: true, attemptCount: true, kind: true, recoveryExpiresAt: true },
   })
   if (!job) return "pending"
+
+  // Expired recovery emails are discarded rather than delivered too late.
+  if (job.kind === "RECOVERY" && (!job.recoveryExpiresAt || job.recoveryExpiresAt <= now)) {
+    await db.bookingEmailOutbox.updateMany({
+      where: { id: jobId, leaseUntil: lease, acceptedAt: null },
+      data: {
+        discardedAt: now,
+        leaseUntil: null,
+        lastErrorCode: "RECOVERY_EXPIRED",
+        sealedPayload: "",
+      },
+    })
+    return "pending"
+  }
 
   let sent = false
   let errorCode = "PROVIDER_UNAVAILABLE"
@@ -242,6 +257,7 @@ export const processPendingBookingEmails = async (
   const jobs = await db.bookingEmailOutbox.findMany({
     where: {
       acceptedAt: null,
+      discardedAt: null,
       nextAttemptAt: { lte: now },
       OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }],
     },

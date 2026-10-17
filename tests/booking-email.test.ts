@@ -65,3 +65,26 @@ test("booking email provider fails closed before activation and rejects HTTP or 
   assert.equal(bookingEmailProviderReady({ ...configured, BOOKING_EMAIL_API_KEY: "" }), false)
   assert.equal(bookingEmailProviderReady({ ...configured, BOOKING_EMAIL_PROVIDER: "disabled" }), false)
 })
+
+
+test("reschedule and cancellation notices state the correct time and retain the same private link", () => {
+  const moved = bookingConfirmationMessage(
+    { ...payload, kind: "RESCHEDULED", previousStartsAt: "2030-01-07T08:00:00.000Z" },
+    "https://fadego.duckdns.org",
+    "reservas@example.test",
+  )
+  assert.match(moved.subject, /alterada/)
+  assert.match(moved.text, /Horário anterior:/)
+  assert.match(moved.text, /Novo horário:/)
+  assert.match(moved.text, /https:\/\/fadego\.duckdns\.org\/r\/ABCDEFGH/)
+
+  const cancelled = bookingConfirmationMessage(
+    { ...payload, kind: "CANCELLED" },
+    "https://fadego.duckdns.org",
+    "reservas@example.test",
+  )
+  assert.match(cancelled.subject, /cancelada/)
+  assert.match(cancelled.text, /A tua marcação foi cancelada/)
+  assert.doesNotMatch(cancelled.text, /altera o horário ou cancela/)
+  assert.match(cancelled.text, /\/r\/ABCDEFGH/)
+})

@@ -12,6 +12,8 @@ const payloadSchema = z.object({
   startsAt: z.string().datetime(),
   timezone: z.string().min(1).max(100),
   accessCode: z.string().length(8),
+  kind: z.enum(["CONFIRMATION", "RESCHEDULED", "CANCELLED"]).optional(),
+  previousStartsAt: z.string().datetime().optional(),
 })
 
 export type BookingEmailPayload = z.infer<typeof payloadSchema>

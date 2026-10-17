@@ -59,26 +59,49 @@ export const bookingConfirmationMessage = (
     bookingAccessPath(payload.accessCode),
     origin,
   ).toString()
+  const kind = payload.kind ?? "CONFIRMATION"
+  const previousTime = payload.previousStartsAt
+    ? new Intl.DateTimeFormat("pt-PT", {
+        timeZone: payload.timezone,
+        dateStyle: "full",
+        timeStyle: "short",
+      }).format(new Date(payload.previousStartsAt))
+    : null
+  const subject = kind === "RESCHEDULED"
+    ? "FADEGO — marcação alterada"
+    : kind === "CANCELLED"
+      ? "FADEGO — marcação cancelada"
+      : "FADEGO — confirmação e acesso privado à tua marcação"
+  const actionLines = kind === "RESCHEDULED"
+    ? [
+        "A tua marcação foi alterada.",
+        ...(previousTime ? ["Horário anterior: " + previousTime] : []),
+        "Novo horário: " + humanTime,
+      ]
+    : kind === "CANCELLED"
+      ? ["A tua marcação foi cancelada.", "Horário cancelado: " + humanTime]
+      : ["A tua marcação foi registada.", "Data e hora inicialmente reservadas: " + humanTime]
   return {
     from,
     to: payload.email,
-    subject: "FADEGO — confirmação e acesso privado à tua marcação",
+    subject,
     text: [
       "Olá " + line(payload.customerName) + ",",
       "",
-      "A tua marcação foi registada.",
+      ...actionLines,
       "Barbearia: " + line(payload.barbershopName),
       "Serviço: " + line(payload.serviceName),
-      "Data e hora inicialmente reservadas: " + humanTime,
       "",
-      "Consulta a marcação, altera o horário ou cancela através do teu link privado:",
+      kind === "CANCELLED"
+        ? "Consulta o estado da marcação através do teu link privado:"
+        : "Consulta a marcação, altera o horário ou cancela através do teu link privado:",
       link,
       "",
       "Código privado: " + payload.accessCode,
       "O link mostra sempre o estado e horário mais recentes.",
       "Não partilhes este link. Não precisas de criar uma conta.",
       "",
-      "Se não fizeste esta reserva, contacta diretamente a barbearia.",
+      "Se não reconheces esta alteração, contacta diretamente a barbearia.",
       "FADEGO",
     ].join("\n"),
   }

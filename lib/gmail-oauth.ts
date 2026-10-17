@@ -145,8 +145,11 @@ const formPost = async (data: URLSearchParams, fetcher: typeof fetch) => {
           "error" in failure && failure.error === "invalid_grant") {
         throw new Error("GMAIL_REFRESH_REVOKED")
       }
+      // json() already consumed or locked the body, even when parsing failed.
+      // A second cancel() here throws ERR_INVALID_STATE and masks the error.
+    } else {
+      await response.body?.cancel()
     }
-    await response.body?.cancel()
     throw new Error("GMAIL_TOKEN_REQUEST_REJECTED")
   }
   const raw: unknown = await response.json()

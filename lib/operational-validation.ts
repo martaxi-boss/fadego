@@ -152,3 +152,9 @@ export type StaffUpdateInput = z.infer<typeof staffUpdateInputSchema>
 export type ChairInput = z.infer<typeof chairInputSchema>
 export type ServiceInput = z.infer<typeof serviceInputSchema>
 export type OpeningHourInput = z.infer<typeof openingHourInputSchema>
+
+// Accept a pre-existing tenant contact, without granting sender privileges.
+export const barbershopContactEmailSchema = z
+  .string().trim().toLowerCase().max(254)
+  .refine((value) => value === "" || z.email().safeParse(value).success, "Email inválido.")
+  .transform((value) => value ? value : null)

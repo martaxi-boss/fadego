@@ -102,6 +102,15 @@ async function main() {
     await open(owner, "/login")
     await assertCoreAccessibility(owner, "administrative login")
     await signIn(owner, process.env.FADEGO_DEMO_EMAIL)
+    await open(owner, "/admin/" + shopA + "/contact")
+    await assertCoreAccessibility(owner, "OWNER contact settings")
+    const shopEmail = owner.locator('input[name="contactEmail"]')
+    assert.equal(await shopEmail.inputValue(), "shop-a@example.test")
+    await shopEmail.fill("owner-test-inbox@example.test")
+    await owner.getByRole("button", { name: "Guardar email" }).click()
+    await owner.waitForURL((url) => url.searchParams.get("notice") === "saved", { timeout: 20000 })
+    assert.equal(await owner.locator('input[name="contactEmail"]').inputValue(),
+      "owner-test-inbox@example.test", "OWNER must save tenant-specific mailbox")
     await open(owner, "/admin/" + shopA + "/customers")
     const ownerCustomers = await owner.locator("main").innerText()
     assert.match(ownerCustomers, /João de Exemplo/)
@@ -180,6 +189,10 @@ async function main() {
     assert.match(staffClub, /Cliente Norte Fictício/)
     assert.ok(!staffClub.includes(privatePhone), "STAFF Club must redact phone")
 
+    assert.equal(await staff.locator('a[href="/admin/' + shopB + '/contact"]').count(), 0,
+      "STAFF must not see mailbox administration")
+    response = await open(staff, "/admin/" + shopB + "/contact")
+    assert.equal(response.status(), 404, "STAFF must not access contact email settings")
     response = await open(staff, "/admin/" + shopB + "/customers")
     assert.equal(response.status(), 404, "STAFF directory must be explicitly unavailable")
     assert.ok(!(await staff.locator("body").innerText()).includes(privatePhone))

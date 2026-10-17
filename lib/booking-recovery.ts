@@ -85,7 +85,7 @@ export const requestBookingRecovery = async (
 
   const tenant = await db.barbershop.findUnique({
     where: { slug: parsed.data.barbershopSlug },
-    select: { id: true, name: true, timezone: true, status: true },
+    select: { id: true, name: true, timezone: true, status: true, contactEmail: true },
   })
   if (!tenant || tenant.status !== "ACTIVE" || !tenant.timezone) return generic
 
@@ -161,6 +161,7 @@ export const requestBookingRecovery = async (
       email: booking.customerEmailSnapshot!,
       customerName: booking.customerNameSnapshot.slice(0, 120),
       barbershopName: tenant.name.slice(0, 200),
+      barbershopContactEmail: tenant.contactEmail ?? undefined,
       serviceName: booking.serviceNameSnapshot.slice(0, 200),
       startsAt: booking.startsAt.toISOString(),
       timezone: tenant.timezone!,

@@ -422,7 +422,7 @@ export const createPublicBooking = async (
     return await runBookingMutation(async (tx) => {
       const authoritativeTenant = await tx.barbershop.findUnique({
         where: { slug: parsed.data.barbershopSlug },
-        select: { id: true, status: true, name: true, timezone: true },
+        select: { id: true, status: true, name: true, timezone: true, contactEmail: true },
       })
 
       if (!authoritativeTenant || authoritativeTenant.status !== "ACTIVE") {
@@ -463,6 +463,7 @@ export const createPublicBooking = async (
         email: parsed.data.customer.email,
         customerName: customer.name,
         barbershopName: authoritativeTenant.name,
+        barbershopContactEmail: authoritativeTenant.contactEmail ?? undefined,
         serviceName: booking.serviceNameSnapshot,
         startsAt: booking.startsAt.toISOString(),
         timezone: authoritativeTenant.timezone,

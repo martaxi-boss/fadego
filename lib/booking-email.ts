@@ -8,7 +8,7 @@ import { bookingAccessPath } from "@/lib/booking-access"
 // Explicitly opt in to one vetted transactional provider. This module cannot
 // send emails without the Owner-approved credentials from the VPS vault.
 export type BookingEmailTransport = (
-  message: { from: string; to: string; subject: string; text: string },
+  message: { from: string; to: string; subject: string; text: string; replyTo?: string },
   idempotencyKey: string,
 ) => Promise<boolean>
 
@@ -55,12 +55,20 @@ export const bookingConfirmationMessage = (
     dateStyle: "full",
     timeStyle: "short",
   }).format(when)
+
+  // Sender domain remains verified/central; tenant controls only display and reply.
+  const senderName = line(payload.barbershopName)
+    .replace(/[^\\p{L}\\p{N} .&'-]/gu, " ").replace(/\\s+/g, " ")
+    .trim().slice(0, 80) || "FADEGO"
+  const brandedFrom = senderName + " <" + from + ">"
+  const replyTo = payload.barbershopContactEmail
   const kind = payload.kind ?? "CONFIRMATION"
   if (kind === "RECOVERY") {
     if (!payload.recoveryToken) throw new Error("INVALID_RECOVERY_ACCESS_TOKEN")
     const link = new URL("/recuperar/" + payload.recoveryToken, origin).toString()
     return {
-      from,
+      from: brandedFrom,
+      ...(replyTo ? { replyTo } : {}),
       to: payload.email,
       subject: "FADEGO — recuperar acesso à tua marcação",
       text: [
@@ -105,7 +113,8 @@ export const bookingConfirmationMessage = (
       ? ["A tua marcação foi cancelada.", "Horário cancelado: " + humanTime]
       : ["A tua marcação foi registada.", "Data e hora inicialmente reservadas: " + humanTime]
   return {
-    from,
+    from: brandedFrom,
+    ...(replyTo ? { replyTo } : {}),
     to: payload.email,
     subject,
     text: [
@@ -144,6 +153,7 @@ export const sendWithResend: BookingEmailTransport = async (mail, id) => {
       },
       body: JSON.stringify({
         from: mail.from,
+        ...(mail.replyTo ? { reply_to: mail.replyTo } : {}),
         to: [mail.to],
         subject: mail.subject,
         text: mail.text,

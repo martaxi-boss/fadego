@@ -8,6 +8,7 @@ const payloadSchema = z.object({
   email: z.string().email().max(254),
   customerName: z.string().min(1).max(120),
   barbershopName: z.string().min(1).max(200),
+  barbershopContactEmail: z.email().max(254).optional(),
   serviceName: z.string().min(1).max(200),
   startsAt: z.string().datetime(),
   timezone: z.string().min(1).max(100),

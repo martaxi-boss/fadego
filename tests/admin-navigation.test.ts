@@ -7,7 +7,7 @@ test("overview cards and navigation share the same canonical module list", () =>
   assert.equal(all.length, TENANT_ADMIN_MODULES.length)
   assert.deepEqual(
     all.map((module) => module.href),
-    ["agenda", "customers", "professionals", "chairs", "services", "hours", "club"],
+    ["agenda", "customers", "professionals", "chairs", "services", "hours", "club", "contact"],
   )
   assert.equal(new Set(all.map((module) => module.href)).size, all.length)
 })
@@ -15,6 +15,7 @@ test("overview cards and navigation share the same canonical module list", () =>
 test("staff navigation never exposes manager-only customer directory", () => {
   const staffModules = tenantModulesForRole("STAFF")
   assert.equal(staffModules.some((module) => module.href === "customers"), false)
+  assert.equal(staffModules.some((module) => module.href === "contact"), false)
   assert.equal(staffModules.some((module) => module.href === "agenda"), true)
   assert.equal(staffModules.some((module) => module.href === "club"), true)
   for (const role of ["OWNER", "ADMIN"] as const) {

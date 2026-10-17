@@ -22,6 +22,7 @@ async function main() {
   const shop = await db.barbershop.create({
     data: {
       name: "Atelier FADEGO — Demonstração",
+      contactEmail: "shop-a@example.test",
       slug: "atelier-fadego-demo",
       status: "ACTIVE",
       timezone: "Europe/Lisbon",
@@ -181,6 +182,7 @@ async function main() {
   const northShop = await db.barbershop.create({
     data: {
       name: "Barbearia Norte — Exemplo",
+      contactEmail: "shop-b@example.test",
       slug: "barbearia-norte-demo",
       status: "ACTIVE",
       timezone: "Europe/Lisbon",

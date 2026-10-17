@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { AuthorizationError } from "@/lib/access-policy"
 import { requireBarbershopBySlug } from "@/lib/authorization"
+import { db } from "@/lib/prisma"
 import {
   createChairConfiguration,
   createServiceConfiguration,
@@ -15,6 +16,7 @@ import {
   updateStaffMember,
 } from "@/lib/operational-config"
 import {
+  barbershopContactEmailSchema,
   chairInputSchema,
   openingHourInputSchema,
   resourceIdSchema,
@@ -24,7 +26,7 @@ import {
 } from "@/lib/operational-validation"
 import { consumeRateLimit, hashRateLimitKey } from "@/lib/rate-limit"
 
-type Section = "professionals" | "chairs" | "services" | "hours"
+type Section = "professionals" | "chairs" | "services" | "hours" | "contact"
 type Notice =
   | "saved"
   | "invalid"
@@ -347,4 +349,20 @@ export async function saveOpeningHourAction(
   }
 
   finishWrite(access.barbershop.slug, "hours")
+}
+
+
+export async function updateBarbershopContactEmailAction(rawSlug: string, formData: FormData) {
+  const access = await requireWriteAccess(rawSlug, "contact")
+  const parsed = barbershopContactEmailSchema.safeParse(formText(formData, "contactEmail"))
+  if (!parsed.success) redirectNotice(access.barbershop.slug, "contact", "invalid")
+  try {
+    await db.barbershop.update({
+      where: { id: access.barbershop.id },
+      data: { contactEmail: parsed.data },
+    })
+  } catch (error) {
+    handleWriteFailure(access.barbershop.slug, "contact", "update-contact-email", error)
+  }
+  finishWrite(access.barbershop.slug, "contact")
 }

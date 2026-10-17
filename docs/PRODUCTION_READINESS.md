@@ -23,6 +23,7 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Basic browser accessibility smoke: Portuguese document language, visible form-control names, image alt attributes on booking/login/recovery/OWNER/STAFF views (not a full WCAG audit)
 - [ ] Full API/dependency audit, performance, WCAG accessibility audit and load/stress certification
 - [x] Public booking requires customer email; encrypted confirmation outbox with automatic retries (code/CI)
+- [x] Tenant-specific contact mailbox, OWNER/ADMIN edit, branded verified sender and tenant Reply-To; code/CI only
 - [ ] Provider-approved real email sender, domain verification, live delivery proof, and opt-out policies for other notifications
 - [x] Encrypted email events for customer cancellations and reschedules with same-transaction outbox and idempotent retries (code/CI)
 - [x] Expiring one-use customer booking-access recovery by verified email, phone and local date (code/CI)
@@ -66,3 +67,9 @@ deployment exists without verifying it.
 - Ensure publicly accessible pages are not indexed prematurely: root metadata
   currently sets `robots: noindex` pending launch approval.
 - Confirm administrative bootstrap/recovery and robust customer data isolation.
+
+## Contact email for each barbershop
+
+Each tenant may configure `Barbershop.contactEmail` in `/admin/{slug}/contact` (OWNER/ADMIN only), including an existing Gmail or a test mailbox. Existing tenants retain a null value until configured. This address is a tenant **contact/Reply-To**, not permission to send email with an unverified sender domain. The platform sender stays on a verified FADEGO domain while the display name is the barbershop's name.
+
+The contact address is included in the encrypted outbox snapshot for booking confirmation, changes, cancellations and private-link recovery. Old encrypted messages remain readable because the new field is optional. Private codes are not silently copied to the shop; shop-side automatic notifications would require a distinct privacy-safe template and consent/policy. Customer email remains mandatory. No provider connected, no live email or new paid service by this change. The free quota is shared across tenants.

@@ -137,7 +137,7 @@ export default function HomePage() {
               A demonstração utiliza dados fictícios e não faz reservas ou envios reais.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs font-medium text-[#cde2d2] sm:text-sm">
-              {["Sem conta para o cliente", "Agenda organizada", "Dados de cada negócio separados"].map(
+              {["Sem conta para o cliente", "Agenda organizada", "Dados separados por barbearia"].map(
                 (item) => (
                   <span key={item} className="inline-flex items-center gap-2">
                     <Check aria-hidden="true" className="size-4 shrink-0 text-[#bcebbb]" />

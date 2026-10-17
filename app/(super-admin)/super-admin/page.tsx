@@ -53,8 +53,8 @@ export default async function SuperAdminPage() {
         ))}
       </section>
       <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-slate-900">Barbearias recentes</h2>
-        <p className="mt-1 text-sm text-slate-500">Vista de consulta, sem gestão remota de contas.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-semibold text-slate-900">Barbearias recentes</h2><Link href="/super-admin/barbearias" className="rounded-lg bg-teal-900 px-4 py-2 text-sm font-semibold text-white">Gerir barbearias →</Link></div>
+        <p className="mt-1 text-sm text-slate-500">Visão geral das contas. As operações de gestão estão no painel protegido.</p>
         <div className="mt-5 divide-y divide-gray-100">
           {recentShops.map((shop) => (
             <div key={shop.id} className="flex flex-wrap items-center justify-between gap-3 py-3">

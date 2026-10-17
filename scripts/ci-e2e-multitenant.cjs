@@ -120,6 +120,36 @@ async function main() {
     await open(owner, "/login")
     await assertCoreAccessibility(owner, "administrative login")
     await signIn(owner, process.env.FADEGO_DEMO_EMAIL)
+    // Platform manager uses the actual disposable CI database.
+    await open(owner, "/super-admin/barbearias")
+    await assertCoreAccessibility(owner, "SUPER_ADMIN tenant accounts")
+    await owner.locator('input[name="name"]').fill("Barbearia Gestão Fictícia")
+    await owner.locator('input[name="slug"]').fill("barbearia-gestao-ci")
+    await owner.locator('input[name="ownerEmail"]').fill("pending-owner-ci@example.test")
+    await owner.locator('input[name="contactEmail"]').fill("ci-shop@example.test")
+    await owner.getByRole("button", { name: "Criar barbearia suspensa" }).click()
+    await owner.waitForURL((url) => url.pathname.startsWith("/super-admin/barbearias/") &&
+      url.searchParams.get("notice") === "created", { timeout: 20000 })
+    await assertCoreAccessibility(owner, "SUPER_ADMIN tenant detail")
+    assert.match(await owner.locator("main").innerText(), /Identidade pendente/)
+    const newShopId = route(owner).split("/").at(-1)
+    const platformDb = new Client({ connectionString: process.env.DATABASE_URL })
+    try {
+      await platformDb.connect()
+      const { rows } = await platformDb.query(
+        'SELECT b."status", u."active" AS "userActive", m."active" AS "memberActive", m."role" FROM "Barbershop" b JOIN "BarbershopMember" m ON m."barbershopId" = b."id" JOIN "User" u ON u."id" = m."userId" WHERE b."id" = $1',
+        [newShopId],
+      )
+      assert.equal(rows.length, 1)
+      assert.deepEqual(rows[0], {
+        status: "SUSPENDED", userActive: false, memberActive: false, role: "OWNER",
+      }, "New tenant owner must never be granted active access automatically")
+    } finally {
+      await platformDb.end()
+    }
+    await owner.getByRole("button", { name: "Ativar barbearia" }).click()
+    await owner.waitForURL((url) => url.searchParams.get("notice") === "not-ready", { timeout: 20000 })
+    assert.match(await owner.locator("main").innerText(), /Antes de ativar/)
     await open(owner, "/admin/" + shopA + "/contact")
     await assertCoreAccessibility(owner, "OWNER contact settings")
     const shopEmail = owner.locator('input[name="contactEmail"]')
@@ -196,6 +226,9 @@ async function main() {
     const staffContext = await browser.newContext()
     const staff = await staffContext.newPage()
     await signIn(staff, "ci-staff-north@fadego.example")
+    await open(staff, "/super-admin/barbearias")
+    assert.equal(route(staff), "/login", "STAFF must not manage platform accounts")
+    assert.ok(!(await staff.locator("body").innerText()).includes("Barbearia Gestão Fictícia"))
     await open(staff, "/admin")
     const staffShops = await staff.locator("main").innerText()
     assert.match(staffShops, /Barbearia Norte/)

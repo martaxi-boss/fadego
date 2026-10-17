@@ -18,7 +18,13 @@ assert.match(home.body, /noindex/i, "site must stay unindexed before launch")
 
 const login = await get("/login")
 assert.equal(login.response.status, 200, "login page must respond with HTTP 200")
-assert.match(login.body, /Entrar na plataforma/, "login form must render")
+assert.match(login.body, /O meu Portal FADEGO/, "owner portal must render")
+assert.match(login.body, /A tua palavra-passe/, "owner portal must request only a password")
+assert.match(login.body, /name="password"/, "owner password field must render")
+const staffLogin = await get("/login?acesso=equipa")
+assert.equal(staffLogin.response.status, 200, "staff login page must respond with HTTP 200")
+assert.match(staffLogin.body, /Entrar na plataforma/, "staff login must remain available")
+assert.match(staffLogin.body, /name="email"/, "tenant staff login must retain email authentication")
 
 const admin = await get("/admin")
 assert.ok(

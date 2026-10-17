@@ -1,9 +1,32 @@
 import Image from "next/image"
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { ArrowLeft, Check, Scissors } from "lucide-react"
 import LoginForm from "@/app/login/login-form"
+import OwnerLoginForm from "@/app/login/owner-login-form"
+import { auth } from "@/lib/auth"
+import { db } from "@/lib/prisma"
 
-export default function LoginPage() {
+export const dynamic = "force-dynamic"
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ acesso?: string }>
+}) {
+  const query = await searchParams
+  const staffMode = query.acesso === "equipa"
+  const session = await auth()
+  if (session?.user?.id) {
+    const identity = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { active: true, platformRole: true },
+    })
+    if (identity?.active) {
+      redirect(identity.platformRole === "SUPER_ADMIN" ? "/super-admin" : "/admin")
+    }
+  }
+
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0d2923] px-5 py-10 sm:px-8 lg:py-16">
       <div aria-hidden="true" className="pointer-events-none absolute -right-32 -top-40 size-[540px] rounded-full bg-[#95cc9f]/10 blur-3xl" />
@@ -35,15 +58,29 @@ export default function LoginPage() {
               <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[#64806f]">Barbearias em movimento</p>
             </div>
           </div>
-          <p className="mt-10 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#3b8568]">Área reservada</p>
-          <h1 className="mt-2 text-3xl font-black tracking-[-0.05em] text-[#183b2e] sm:text-4xl">Entrar na plataforma</h1>
-          <p className="mt-4 text-sm leading-7 text-[#667e70]">
-            Utiliza as credenciais administrativas fornecidas pela tua organização.
+          <p className="mt-10 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#3b8568]">
+            {staffMode ? "Acesso das barbearias" : "Área privada do proprietário"}
           </p>
-          <div className="mt-7"><LoginForm /></div>
-          <div className="mt-9 flex items-start gap-2 border-t border-[#e7ece7] pt-5 text-xs leading-6 text-[#748679]">
+          <h1 className="mt-2 text-3xl font-black tracking-[-0.05em] text-[#183b2e] sm:text-4xl">
+            {staffMode ? "Entrar na plataforma" : "O meu Portal FADEGO"}
+          </h1>
+          <p className="mt-4 text-sm leading-7 text-[#667e70]">
+            {staffMode
+              ? "Entra com as credenciais da tua barbearia."
+              : "Só precisas da tua palavra-passe. Não é necessário indicar username nem email."}
+          </p>
+          <div className="mt-7">
+            {staffMode ? <LoginForm /> : <OwnerLoginForm />}
+          </div>
+          <div className="mt-7 border-t border-[#e7ece7] pt-5">
+            <Link className="text-sm font-semibold text-[#285c45] underline underline-offset-4"
+              href={staffMode ? "/login" : "/login?acesso=equipa"}>
+              {staffMode ? "Acesso do proprietário FADEGO" : "Acesso de barbearias e funcionários"}
+            </Link>
+          </div>
+          <div className="mt-5 flex items-start gap-2 text-xs leading-6 text-[#748679]">
             <Check className="mt-1 size-3.5 shrink-0 text-[#418a6d]" aria-hidden="true" />
-            O acesso administrativo é reservado a identidades autorizadas.
+            O acesso administrativo exige autenticação. As áreas de cada barbearia continuam isoladas.
           </div>
         </section>
       </div>

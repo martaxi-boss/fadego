@@ -35,7 +35,9 @@ test("public page keeps navigation and clearly marks demo reservations", () => {
 })
 
 test("login form and accessible image description remain functional", () => {
+  assert.match(login, /<OwnerLoginForm \/>/)
   assert.match(login, /<LoginForm \/>/)
+  assert.match(login, /\/login\?acesso=equipa/)
   assert.match(login, /Entrar na plataforma/)
   assert.match(login, /href="\/"/)
   assert.match(home, /alt="Ilustração de uma barbearia/)

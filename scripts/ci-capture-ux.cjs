@@ -31,10 +31,12 @@ async function capture(page, path, file, label) {
 
 async function authenticate(page) {
   await page.goto(base + "/login", { waitUntil: "domcontentloaded" })
-  await page.locator('input[name="email"]').fill(process.env.FADEGO_DEMO_EMAIL)
+  if (await page.locator('input[name="email"]').count() !== 0) {
+    throw new Error("Owner portal must not request an email or username")
+  }
   await page.locator('input[name="password"]').fill(process.env.FADEGO_DEMO_PASSWORD)
-  await page.getByRole("button", { name: "Entrar", exact: true }).click()
-  await page.waitForURL((url) => url.pathname === "/admin", { timeout: 25000 })
+  await page.getByRole("button", { name: "Entrar no meu portal" }).click()
+  await page.waitForURL((url) => url.pathname === "/super-admin", { timeout: 25000 })
 }
 
 async function main() {

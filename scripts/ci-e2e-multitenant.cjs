@@ -36,11 +36,22 @@ async function open(page, path) {
 }
 
 async function signIn(page, email) {
-  await open(page, "/login")
-  await page.locator('input[name="email"]').fill(email)
+  const owner = email === process.env.FADEGO_DEMO_EMAIL
+  await open(page, owner ? "/login" : "/login?acesso=equipa")
+  if (owner) {
+    assert.equal(await page.locator('input[name="email"]').count(), 0,
+      "Owner must authenticate without a username")
+    assert.equal(await page.locator('input[name="password"]').getAttribute("autocomplete"),
+      "current-password", "Owner password should support Android autofill")
+  } else {
+    await page.locator('input[name="email"]').fill(email)
+  }
   await page.locator('input[name="password"]').fill(process.env.FADEGO_DEMO_PASSWORD)
-  await page.getByRole("button", { name: "Entrar", exact: true }).click()
-  await page.waitForURL((url) => url.pathname === "/admin", { timeout: 25000 })
+  await page.getByRole("button", {
+    name: owner ? "Entrar no meu portal" : "Entrar", exact: true,
+  }).click()
+  await page.waitForURL((url) => url.pathname === (owner ? "/super-admin" : "/admin"),
+    { timeout: 25000 })
 }
 
 function route(page) {
@@ -119,6 +130,12 @@ async function main() {
     const owner = await ownerContext.newPage()
     await open(owner, "/login")
     await assertCoreAccessibility(owner, "administrative login")
+    assert.equal(await owner.locator('input[name="email"]').count(), 0,
+      "Platform portal must show only the password field")
+    await owner.locator('input[name="password"]').fill("incorrect-owner-passphrase")
+    await owner.getByRole("button", { name: "Entrar no meu portal" }).click()
+    await owner.getByRole("alert").waitFor({ timeout: 20000 })
+    assert.equal(route(owner), "/login", "Wrong owner password must never log in")
     await signIn(owner, process.env.FADEGO_DEMO_EMAIL)
     // Platform manager uses the actual disposable CI database.
     await open(owner, "/super-admin/barbearias")
@@ -226,8 +243,10 @@ async function main() {
     const staffContext = await browser.newContext()
     const staff = await staffContext.newPage()
     await signIn(staff, "ci-staff-north@fadego.example")
+    await open(staff, "/login?acesso=equipa")
+    assert.equal(route(staff), "/admin", "Authenticated tenant staff stays in own admin")
     await open(staff, "/super-admin/barbearias")
-    assert.equal(route(staff), "/login", "STAFF must not manage platform accounts")
+    assert.equal(route(staff), "/admin", "STAFF must not manage platform accounts")
     assert.ok(!(await staff.locator("body").innerText()).includes("Barbearia Gestão Fictícia"))
     await open(staff, "/admin")
     const staffShops = await staff.locator("main").innerText()

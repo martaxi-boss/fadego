@@ -72,7 +72,7 @@ test("shops can choose a safe email prefix; long slugs still fit SMTP limit", ()
   assert.equal(resolveTenantSenderAddress(
     { ...booking, senderAlias: undefined }, "reservas@verified.example",
   ), "reservas+norte@verified.example")
-  const longSlug = "barbearia-" + "m".repeat(54)
+  const longSlug = "barbearia-" + "m".repeat(53)
   const address = resolveTenantSenderAddress({
     ...booking, barbershopSlug: longSlug, senderAlias: "escolhido-com-30-caracteres-123",
   }, "reservas@verified.example")

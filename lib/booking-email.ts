@@ -47,7 +47,7 @@ const line = (value: string) => value
 // User-controlled mailboxes outside that domain are NEVER used for From
 // without a separate authenticated OAuth or domain-ownership integration.
 export const resolveTenantSenderAddress = (payload: BookingEmailPayload, platformFrom: string) => {
-  const match = /^([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$/.exec(platformFrom)
+  const match = /^([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})$/.exec(platformFrom)
   if (!match) throw new Error("INVALID_VERIFIED_PLATFORM_SENDER")
   // Backward compatibility for messages queued before tenant aliases existed.
   if (!payload.barbershopSlug) return platformFrom

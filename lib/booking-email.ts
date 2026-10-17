@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { db } from "@/lib/prisma"
 import {
   openBookingEmail,
@@ -42,6 +43,31 @@ const line = (value: string) => value
   .replace(/\s+/g, " ")
   .trim()
 
+// A verified platform domain can host many tenant-specific From addresses.
+// User-controlled mailboxes outside that domain are NEVER used for From
+// without a separate authenticated OAuth or domain-ownership integration.
+export const resolveTenantSenderAddress = (payload: BookingEmailPayload, platformFrom: string) => {
+  const match = /^([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$/.exec(platformFrom)
+  if (!match) throw new Error("INVALID_VERIFIED_PLATFORM_SENDER")
+  // Backward compatibility for messages queued before tenant aliases existed.
+  if (!payload.barbershopSlug) return platformFrom
+
+  const slug = payload.barbershopSlug
+  const alias = payload.senderAlias ?? "reservas"
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 63 ||
+      !/^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(alias)) {
+    throw new Error("INVALID_TENANT_SENDER")
+  }
+  // SMTP local-parts cannot exceed 64 octets. Long names use a stable hash
+  // instead of allowing truncation to collide with another tenant's alias.
+  const room = 64 - alias.length - 1
+  const suffix = slug.length <= room
+    ? slug
+    : slug.slice(0, room - 17) + "-" + createHash("sha256")
+      .update(slug).digest("hex").slice(0, 16)
+  return alias + "+" + suffix + "@" + match[2].toLowerCase()
+}
+
 // A fixed snapshot avoids sending a different email body on a network retry.
 // If the appointment has changed, the link always shows its CURRENT status.
 export const bookingConfirmationMessage = (
@@ -59,7 +85,7 @@ export const bookingConfirmationMessage = (
   // Sender domain remains verified/central; tenant controls only display and reply.
   const senderName = line(payload.barbershopName)
     .replace(/[^A-Za-zÀ-ÿ0-9 .&'-]/g, " ").trim().slice(0, 80) || "FADEGO"
-  const brandedFrom = senderName + " <" + from + ">"
+  const brandedFrom = senderName + " <" + resolveTenantSenderAddress(payload, from) + ">"
   const replyTo = payload.barbershopContactEmail
   const kind = payload.kind ?? "CONFIRMATION"
   if (kind === "RECOVERY") {

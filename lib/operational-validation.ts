@@ -158,3 +158,11 @@ export const barbershopContactEmailSchema = z
   .string().trim().toLowerCase().max(254)
   .refine((value) => value === "" || z.email().safeParse(value).success, "Email inválido.")
   .transform((value) => value ? value : null)
+
+
+// Optional display/local-part preference only; it can never specify a remote domain.
+export const barbershopSenderAliasSchema = z
+  .string().trim().toLowerCase().max(32)
+  .refine((value) => value === "" || /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(value),
+    "Usa letras minúsculas, números ou hífen (máximo 32 caracteres).")
+  .transform((value) => value || null)

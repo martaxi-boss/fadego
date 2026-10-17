@@ -105,12 +105,17 @@ async function main() {
     await open(owner, "/admin/" + shopA + "/contact")
     await assertCoreAccessibility(owner, "OWNER contact settings")
     const shopEmail = owner.locator('input[name="contactEmail"]')
+    const senderAlias = owner.locator('input[name="senderAlias"]')
     assert.equal(await shopEmail.inputValue(), "shop-a@example.test")
+    assert.equal(await senderAlias.inputValue(), "")
     await shopEmail.fill("owner-test-inbox@example.test")
+    await senderAlias.fill("cortes")
     await owner.getByRole("button", { name: "Guardar email" }).click()
     await owner.waitForURL((url) => url.searchParams.get("notice") === "saved", { timeout: 20000 })
     assert.equal(await owner.locator('input[name="contactEmail"]').inputValue(),
       "owner-test-inbox@example.test", "OWNER must save tenant-specific mailbox")
+    assert.equal(await owner.locator('input[name="senderAlias"]').inputValue(),
+      "cortes", "OWNER must save tenant-specific verified-domain alias")
     await open(owner, "/admin/" + shopA + "/customers")
     const ownerCustomers = await owner.locator("main").innerText()
     assert.match(ownerCustomers, /João de Exemplo/)

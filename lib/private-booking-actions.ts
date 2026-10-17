@@ -100,6 +100,8 @@ type PrivateAccess = {
   customerName: string
   serviceName: string
   barbershopName: string
+  barbershopSlug: string
+  senderAlias: string | null
   barbershopContactEmail: string | null
   timezone: string
 }
@@ -117,7 +119,7 @@ const resolvePrivateAccess = async (
       revokedAt: true,
       barbershopId: true,
       bookingId: true,
-      barbershop: { select: { name: true, timezone: true, contactEmail: true } },
+      barbershop: { select: { name: true, slug: true, senderAlias: true, timezone: true, contactEmail: true } },
       booking: {
         select: {
           customerEmailSnapshot: true,
@@ -153,6 +155,8 @@ const resolvePrivateAccess = async (
     customerName: token.booking.customerNameSnapshot,
     serviceName: token.booking.serviceNameSnapshot,
     barbershopName: token.barbershop.name,
+    barbershopSlug: token.barbershop.slug,
+    senderAlias: token.barbershop.senderAlias,
     barbershopContactEmail: token.barbershop.contactEmail,
     timezone: token.barbershop.timezone,
   }
@@ -175,6 +179,8 @@ const bookingActionEmail = (
     email: access.customerEmail.toLowerCase(),
     customerName: access.customerName.slice(0, 120),
     barbershopName: access.barbershopName.slice(0, 200),
+    barbershopSlug: access.barbershopSlug,
+    senderAlias: access.senderAlias ?? undefined,
     barbershopContactEmail: access.barbershopContactEmail ?? undefined,
     serviceName: access.serviceName.slice(0, 200),
     startsAt: updated.startsAt.toISOString(),

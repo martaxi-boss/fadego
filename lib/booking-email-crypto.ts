@@ -8,6 +8,8 @@ const payloadSchema = z.object({
   email: z.string().email().max(254),
   customerName: z.string().min(1).max(120),
   barbershopName: z.string().min(1).max(200),
+  barbershopSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(63).optional(),
+  senderAlias: z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/).optional(),
   barbershopContactEmail: z.email().max(254).optional(),
   serviceName: z.string().min(1).max(200),
   startsAt: z.string().datetime(),

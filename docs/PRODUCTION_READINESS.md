@@ -23,7 +23,7 @@ This is a development readiness plan, **not proof of an active deployment**.
 - [x] Basic browser accessibility smoke: Portuguese document language, visible form-control names, image alt attributes on booking/login/recovery/OWNER/STAFF views (not a full WCAG audit)
 - [ ] Full API/dependency audit, performance, WCAG accessibility audit and load/stress certification
 - [x] Public booking requires customer email; encrypted confirmation outbox with automatic retries (code/CI)
-- [x] Tenant-specific contact mailbox, OWNER/ADMIN edit, branded verified sender and tenant Reply-To; code/CI only
+- [x] Tenant-specific contact mailbox plus self-service sender prefix under a FADEGO verified domain; OWNER/ADMIN edit, branded From and tenant Reply-To; CI-only (no real send)
 - [ ] Provider-approved real email sender, domain verification, live delivery proof, and opt-out policies for other notifications
 - [x] Encrypted email events for customer cancellations and reschedules with same-transaction outbox and idempotent retries (code/CI)
 - [x] Expiring one-use customer booking-access recovery by verified email, phone and local date (code/CI)
@@ -73,3 +73,11 @@ deployment exists without verifying it.
 Each tenant may configure `Barbershop.contactEmail` in `/admin/{slug}/contact` (OWNER/ADMIN only), including an existing Gmail or a test mailbox. Existing tenants retain a null value until configured. This address is a tenant **contact/Reply-To**, not permission to send email with an unverified sender domain. The platform sender stays on a verified FADEGO domain while the display name is the barbershop's name.
 
 The contact address is included in the encrypted outbox snapshot for booking confirmation, changes, cancellations and private-link recovery. Old encrypted messages remain readable because the new field is optional. Private codes are not silently copied to the shop; shop-side automatic notifications would require a distinct privacy-safe template and consent/policy. Customer email remains mandatory. No provider connected, no live email or new paid service by this change. The free quota is shared across tenants.
+
+
+## Distinct authenticated sender for each barbershop
+
+- OWNER/ADMIN can select a safe sender alias (`senderAlias`, max 32 alphanumeric/hyphen characters) next to `contactEmail` in the already existing tenant email settings. They do **not** choose an untrusted outbound domain. Any alias is combined with that tenant's stable slug and the platform's **verified** sending domain: `escolhido+barbearia@dominio-fadego-verificado`. Long slugs use a deterministic hash to preserve the SMTP local-part length limit. No collision with another barbershop's normal slug, no passwords and no extra provider accounts for ordinary platform aliases.
+- The encrypted outbox snapshots the shop slug and chosen sender prefix alongside the reply address, so queued confirmation, cancellation, rescheduling and recovery messages consistently keep their original sender even if settings later change. Outboxes created by earlier versions (missing those optional fields) still send with the legacy platform address. This is a sent-message snapshot, **not** a global state lookup at retry time.
+- An existing Gmail/Outlook/other mailbox can be the `Reply-To`, but cannot be made `From` by typing its address. Actual send-as through Gmail would require delegated Gmail API OAuth authorization with `gmail.send`, encrypted refresh-token persistence, safe token revocation and Google consent/review; a client-owned domain would require DNS/domain sender authentication. These credentials/consents are **not set up** and sending from outside the verified platform domain is **not supported or claimed live** in this commit.
+- Provider activation, production emails, SNS/SMS/WhatsApp, DNS, billing, real customer tests and merge remain behind the existing material authorization boundary. The name chosen by the barbershop under the FADEGO domain does not imply an inbox is hosted: replies use the separately configured contact mailbox.

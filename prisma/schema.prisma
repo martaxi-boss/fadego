@@ -84,6 +84,7 @@ model Barbershop {
   address                String?
   phone                  String?
   contactEmail           String?                 @db.VarChar(254)
+  senderAlias            String?                 @db.VarChar(32)
   instagram              String?
   officialWebsite        String?
   timezone               String?                 @db.VarChar(255)

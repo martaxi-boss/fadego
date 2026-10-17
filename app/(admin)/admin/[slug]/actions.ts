@@ -17,6 +17,7 @@ import {
 } from "@/lib/operational-config"
 import {
   barbershopContactEmailSchema,
+  barbershopSenderAliasSchema,
   chairInputSchema,
   openingHourInputSchema,
   resourceIdSchema,
@@ -355,11 +356,14 @@ export async function saveOpeningHourAction(
 export async function updateBarbershopContactEmailAction(rawSlug: string, formData: FormData) {
   const access = await requireWriteAccess(rawSlug, "contact")
   const parsed = barbershopContactEmailSchema.safeParse(formText(formData, "contactEmail"))
-  if (!parsed.success) redirectNotice(access.barbershop.slug, "contact", "invalid")
+  const senderAlias = barbershopSenderAliasSchema.safeParse(formText(formData, "senderAlias"))
+  if (!parsed.success || !senderAlias.success) {
+    redirectNotice(access.barbershop.slug, "contact", "invalid")
+  }
   try {
     await db.barbershop.update({
       where: { id: access.barbershop.id },
-      data: { contactEmail: parsed.data },
+      data: { contactEmail: parsed.data, senderAlias: senderAlias.data },
     })
   } catch (error) {
     handleWriteFailure(access.barbershop.slug, "contact", "update-contact-email", error)

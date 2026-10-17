@@ -39,7 +39,7 @@ test("two shops share the same verified sender domain but different reply addres
   assert.equal(north.to, booking.email)
   assert.equal(south.to, booking.email)
   assert.match(north.text, /Barbearia do Norte/)
-  assert.match(north.text, /\\/r\\/ABCDEFGH/)
+  assert.ok(north.text.includes("/r/ABCDEFGH"))
 })
 
 test("tenant reply address stays encrypted in queued message", () => {

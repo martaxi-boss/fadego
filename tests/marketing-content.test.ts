@@ -4,39 +4,52 @@ import { test } from "node:test"
 
 const home = readFileSync("app/page.tsx", "utf8")
 
-test("FADEGO landing explains real booking mechanics in three sequential steps", () => {
-  assert.match(home, /id="como-funciona"/)
-  assert.match(home, /A barbearia prepara/)
-  assert.match(home, /O cliente escolhe/)
-  assert.match(home, /A marcação fica na agenda/)
-  assert.match(home, /serviços, preços, profissionais, cadeiras e horários/)
-  assert.match(home, /o dia e a hora/)
-  assert.match(home, /link privado para alterar ou cancelar/)
-})
-
-test("FADEGO commercial page explains the two audiences without implying shared tenant data", () => {
-  assert.match(home, /Para o dono da barbearia/)
-  assert.match(home, /Para quem vai cortar o cabelo/)
-  assert.match(home, /Cada uma tem o seu painel, a sua equipa e os seus clientes/)
-  assert.match(home, /A administração da plataforma fica separada/)
-  assert.match(home, /Até cinco cadeiras/i)
-})
-
-test("public CTAs open the actual isolated browser-local demonstration, not a fictional signup", () => {
-  assert.match(home, /href="\/experimentar"/)
-  assert.match(home, /Experimentar sem login/)
-  assert.match(home, /Ver demonstração/)
+test("institutional homepage is informational, separate from private operational portal", () => {
+  assert.match(home, /Website FADEGO/)
+  assert.match(home, /Portal da plataforma/)
+  assert.match(home, /Painel de cada barbearia/)
+  assert.match(home, /Página de reservas/)
+  assert.match(home, /website explica a plataforma/)
   assert.match(home, /href="\/login"/)
-  assert.match(home, /Dados fictícios|dados fictícios/)
-  assert.doesNotMatch(home, /href="\/registar"/)
-  assert.doesNotMatch(home, /href="#"/)
+  assert.match(home, /Portal FADEGO/)
+  assert.doesNotMatch(home, /href="\/experimentar"/)
+  assert.doesNotMatch(home, /href="\/b\//)
+  assert.doesNotMatch(home, /<form\b/)
 })
 
-test("Gmail and commercial scope are disclosed honestly during the pilot", () => {
-  assert.match(home, /Gmail do negócio autorizado/)
-  assert.match(home, /quando o Gmail do próprio negócio estiver ligado e autorizado/)
-  assert.match(home, /fase piloto/)
+test("homepage explains configuration, customer booking and notification journey", () => {
+  assert.match(home, /A barbearia organiza/)
+  assert.match(home, /O cliente marca/)
+  assert.match(home, /Todos acompanham/)
+  assert.match(home, /[Nn]ão precisa de criar uma conta FADEGO/)
+  assert.match(home, /link privado para consultar, alterar ou cancelar/)
+  assert.match(home, /Gmail do negócio ligado/)
+})
+
+test("website informs how barbershop schedules, chairs, staff and Club work", () => {
+  assert.match(home, /Agenda e reservas/)
+  assert.match(home, /Serviços e horários/)
+  assert.match(home, /Equipa e cadeiras/)
+  assert.match(home, /Clientes e Club/)
+  assert.match(home, /até cinco cadeiras/)
+  assert.match(home, /Dados separados por barbearia/)
+})
+
+test("future portal management and unavailable services never appear as live offers", () => {
+  assert.match(home, /faz parte da próxima fase do portal/)
+  assert.match(home, /Próximas funcionalidades/)
   assert.match(home, /Pagamentos online ainda não estão disponíveis/)
-  assert.doesNotMatch(home, /pagamentos (integrados|automáticos|disponíveis)/i)
-  assert.doesNotMatch(home, /emails automáticos já ativos/i)
+  assert.match(home, /fase de testes/)
+  assert.doesNotMatch(home, /Entrar na plataforma/)
+  assert.doesNotMatch(home, /Ver demonstração/)
+  assert.doesNotMatch(home, /Experimentar sem login/)
+})
+
+test("marketing page uses local static assets, not external tracking, forms or network calls", () => {
+  assert.match(home, /\/fadego-mark\.webp/)
+  assert.match(home, /\/fadego-atelier\.svg/)
+  assert.match(home, /unoptimized/)
+  assert.doesNotMatch(home, /<script\b/)
+  assert.doesNotMatch(home, /https?:\/\/(?:images|source)\.unsplash\.com/)
+  assert.doesNotMatch(home, /fetch\(/)
 })

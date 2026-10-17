@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 import { test } from "node:test"
 
@@ -8,17 +9,20 @@ const publicBooking = readFileSync("app/b/[slug]/page.tsx", "utf8")
 const capture = readFileSync("scripts/ci-capture-ux.cjs", "utf8")
 const shell = readFileSync("app/_components/admin-shell.tsx", "utf8")
 const illustration = readFileSync("public/fadego-atelier.svg", "utf8")
-const mark = readFileSync("public/fadego-mark.svg", "utf8")
+const mark = readFileSync("public/fadego-mark.webp")
 
 test("FADEGO identity uses original locally hosted artwork without third-party image calls", () => {
   for (const page of [home, login, shell]) {
-    assert.match(page, /\/fadego-mark\.svg/)
+    assert.match(page, /\/fadego-mark\.webp/)
     assert.doesNotMatch(page, /https?:\/\/(?:images|source)\.unsplash\.com/)
   }
   assert.match(home, /\/fadego-atelier\.svg/)
   assert.match(login, /\/fadego-atelier\.svg/)
   assert.match(illustration, /^<svg/)
-  assert.match(mark, /^<svg/)
+  assert.equal(mark.toString("ascii", 0, 4), "RIFF")
+  assert.equal(mark.toString("ascii", 8, 12), "WEBP")
+  // Approved scissors emblem supplied by the Owner; do not regress to an old F.
+  assert.equal(createHash("sha256").update(mark).digest("hex"), "8386058306f181827baa886e58262d2834044fa18a8e7bb2f488ce8b77f7c7c8")
 })
 
 test("public page keeps navigation and clearly marks demo reservations", () => {

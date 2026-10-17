@@ -45,3 +45,14 @@ export const agendaUtcSearchWindow = (date: string) => {
     lt: new Date(midnight + 2 * DAY_MS),
   }
 }
+
+/** Only accept professionals that belong to the tenant being viewed. */
+export const resolveAgendaProfessionalFilter = (
+  value: unknown,
+  tenantProfessionalIds: readonly string[],
+): string => {
+  if (value === "ALL" || value === "GENERAL") return value
+  return typeof value === "string" && tenantProfessionalIds.includes(value)
+    ? value
+    : "ALL"
+}

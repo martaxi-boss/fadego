@@ -40,6 +40,14 @@ export type BookingClock = {
   now: () => Date
 }
 
+// Optional hooks run INSIDE the same tenant-locked booking transaction.
+// Never contact an external service in this callback.
+export type BookingMutationHook = (
+  tx: Prisma.TransactionClient,
+  updated: Booking,
+  previousStartsAt: Date,
+) => Promise<void>
+
 const systemBookingClock: BookingClock = {
   now: () => new Date(),
 }
@@ -670,6 +678,7 @@ const cancelBooking = async (
   bookingId: string,
   cancellationStatus: "CANCELLED_BY_CUSTOMER" | "CANCELLED_BY_SHOP",
   clock: BookingClock = systemBookingClock,
+  onUpdated?: BookingMutationHook,
 ) =>
   runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
@@ -687,7 +696,7 @@ const cancelBooking = async (
       fail("ACTION_TOO_LATE")
     }
 
-    return tx.booking.update({
+    const updated = await tx.booking.update({
       where: {
         id_barbershopId: {
           id: bookingId,
@@ -698,13 +707,16 @@ const cancelBooking = async (
         status: cancellationStatus,
       },
     })
+    if (onUpdated) await onUpdated(tx, updated, current.startsAt)
+    return updated
   })
 
 export const cancelBookingByCustomer = (
   barbershopId: string,
   bookingId: string,
   clock: BookingClock = systemBookingClock,
-) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_CUSTOMER", clock)
+  onUpdated?: BookingMutationHook,
+) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_CUSTOMER", clock, onUpdated)
 
 export const cancelBookingByShop = (
   barbershopId: string,
@@ -716,6 +728,7 @@ export const rescheduleBooking = async (
   bookingId: string,
   startsAtInput: Date,
   clock: BookingClock = systemBookingClock,
+  onUpdated?: BookingMutationHook,
 ) =>
   runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
@@ -759,7 +772,7 @@ export const rescheduleBooking = async (
         current.id,
       )
 
-      return tx.booking.update({
+      const updated = await tx.booking.update({
         where: {
           id_barbershopId: {
             id: current.id,
@@ -773,6 +786,8 @@ export const rescheduleBooking = async (
           chairNumberSnapshot: allocation.chair.number,
         },
       })
+      if (onUpdated) await onUpdated(tx, updated, current.startsAt)
+      return updated
     }
 
     const chair = await allocateGeneralChair(
@@ -783,7 +798,7 @@ export const rescheduleBooking = async (
       current.id,
     )
 
-    return tx.booking.update({
+    const updated = await tx.booking.update({
       where: {
         id_barbershopId: {
           id: current.id,
@@ -797,6 +812,8 @@ export const rescheduleBooking = async (
         chairNumberSnapshot: chair.number,
       },
     })
+    if (onUpdated) await onUpdated(tx, updated, current.startsAt)
+    return updated
   })
 
 export const reassignBookingToStaff = async (

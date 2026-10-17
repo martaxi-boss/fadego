@@ -37,3 +37,17 @@ select,
 textarea {
   font: inherit;
 }
+
+/* Consistent, visible keyboard focus without replacing existing module styles. */
+:where(a, button, input, textarea, select):focus-visible {
+  outline: 3px solid #0f766e;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

@@ -1,7 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { type FormEvent, useState } from "react"
+import { type FormEvent, useRef, useState } from "react"
+import { AvailabilityRequestVersion } from "@/lib/availability-request-version"
 
 type ServiceOption = {
   id: string
@@ -45,6 +46,7 @@ type BookingResponse =
       ok: true
       accessCode: string
       accessPath: string
+      emailStatus: "accepted" | "pending"
     }
   | {
       ok: false
@@ -55,6 +57,7 @@ type BookingResponse =
         | "STAFF_UNAVAILABLE"
         | "SLOT_UNAVAILABLE"
         | "RATE_LIMITED"
+        | "EMAIL_UNAVAILABLE"
         | "UNAVAILABLE"
     }
 
@@ -95,8 +98,11 @@ export default function PublicBookingFlow({
   const [bookingPending, setBookingPending] = useState(false)
   const [successPendingRedirect, setSuccessPendingRedirect] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const availabilityRequests = useRef(new AvailabilityRequestVersion())
 
   const resetSlots = () => {
+    availabilityRequests.current.invalidate()
+    setAvailabilityPending(false)
     setSlots([])
     setSelectedStart("")
     setAvailabilityLoaded(false)
@@ -104,6 +110,7 @@ export default function PublicBookingFlow({
   }
 
   const loadAvailability = async () => {
+    const version = availabilityRequests.current.begin()
     setError(null)
     setSelectedStart("")
     setAvailabilityLoaded(false)
@@ -132,19 +139,25 @@ export default function PublicBookingFlow({
       )
 
       const payload = (await response.json()) as AvailabilityResponse
+      if (!availabilityRequests.current.isCurrent(version)) return false
       if (!payload.ok) {
         setSlots([])
         setError("Não foi possível consultar horários para esta seleção.")
-        return
+        return false
       }
 
       setSlots(payload.availability.slots)
       setAvailabilityLoaded(true)
+      return true
     } catch {
+      if (!availabilityRequests.current.isCurrent(version)) return false
       setSlots([])
       setError("Não foi possível consultar horários neste momento.")
+      return false
     } finally {
-      setAvailabilityPending(false)
+      if (availabilityRequests.current.isCurrent(version)) {
+        setAvailabilityPending(false)
+      }
     }
   }
 
@@ -185,10 +198,17 @@ export default function PublicBookingFlow({
 
       if (!payload.ok) {
         if (payload.code === "SLOT_UNAVAILABLE") {
-          await loadAvailability()
-          setError(
-            "Esse horário acabou de ficar indisponível. Escolhe outro horário.",
-          )
+          const refreshed = await loadAvailability()
+          if (refreshed) {
+            setError(
+              "Esse horário acabou de ficar indisponível. Escolhe outro horário.",
+            )
+          }
+          return
+        }
+
+        if (payload.code === "EMAIL_UNAVAILABLE") {
+          setError("Não é possível enviar o email de confirmação neste momento. Não foi criada nenhuma marcação. Tenta novamente mais tarde.")
           return
         }
 
@@ -267,6 +287,7 @@ export default function PublicBookingFlow({
                       : "rounded-xl border border-gray-200 bg-white p-4 text-left hover:border-gray-500"
                   }
                   key={service.id}
+                  disabled={bookingPending || successPendingRedirect}
                   onClick={() => {
                     setServiceId(service.id)
                     resetSlots()
@@ -316,6 +337,7 @@ export default function PublicBookingFlow({
                     ? "rounded-xl border border-gray-950 bg-gray-950 p-4 text-left text-white"
                     : "rounded-xl border border-gray-200 bg-white p-4 text-left hover:border-gray-500"
                 }
+                disabled={bookingPending || successPendingRedirect}
                 onClick={() => {
                   setMethod(GENERAL_METHOD)
                   resetSlots()
@@ -346,6 +368,7 @@ export default function PublicBookingFlow({
                       : "flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 text-left hover:border-gray-500"
                   }
                   key={professional.id}
+                  disabled={bookingPending || successPendingRedirect}
                   onClick={() => {
                     setMethod(professional.id)
                     resetSlots()
@@ -385,6 +408,7 @@ export default function PublicBookingFlow({
             className="w-full rounded-xl border border-gray-300 px-3 py-3 outline-none focus:border-gray-950"
             type="date"
             value={localDate}
+            disabled={bookingPending || successPendingRedirect}
             onChange={(event) => {
               setLocalDate(event.target.value)
               resetSlots()
@@ -395,7 +419,7 @@ export default function PublicBookingFlow({
 
         <button
           className="rounded-xl bg-gray-950 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={availabilityPending || !localDate}
+          disabled={availabilityPending || bookingPending || successPendingRedirect || !localDate}
           onClick={loadAvailability}
           type="button"
         >
@@ -416,6 +440,7 @@ export default function PublicBookingFlow({
                         : "rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm font-semibold hover:border-gray-950"
                     }
                     key={slot.startsAt}
+                    disabled={bookingPending || successPendingRedirect}
                     onClick={() => {
                       setSelectedStart(slot.startsAt)
                       setError(null)
@@ -464,7 +489,7 @@ export default function PublicBookingFlow({
           </label>
           <label className="block">
             <span className="mb-1 block text-sm text-gray-700">
-              Email <span className="text-gray-400">(opcional)</span>
+              Email <span className="font-semibold text-[#2c7555]">(obrigatório)</span>
             </span>
             <input
               autoComplete="email"
@@ -472,8 +497,20 @@ export default function PublicBookingFlow({
               maxLength={254}
               name="email"
               type="email"
+              required
+              aria-describedby="booking-email-explanation"
             />
           </label>
+          <p id="booking-email-explanation" className="text-xs leading-6 text-gray-600">
+            Vais receber neste email a confirmação, o código e um link privado
+            para consultar, remarcar ou cancelar a reserva, sem criar uma conta.
+          </p>
+          <p className="text-xs leading-6 text-gray-600">
+            Já tens uma reserva e perdeste o acesso?{" "}
+            <a className="font-semibold text-[#176846] underline underline-offset-4" href={"/b/" + encodeURIComponent(slug) + "/recuperar"}>
+              Recuperar a marcação por email
+            </a>
+          </p>
 
           {error ? (
             <p

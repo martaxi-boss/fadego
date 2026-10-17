@@ -64,16 +64,18 @@ enum PlatformSubscriptionStatus {
 }
 
 model User {
-  id           String             @id @default(uuid())
-  name         String?
-  email        String             @unique
-  passwordHash String
-  platformRole PlatformRole       @default(USER)
-  active       Boolean            @default(true)
-  memberships  BarbershopMember[]
-  staffMembers StaffMember[]
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  id                  String                  @id @default(uuid())
+  name                String?
+  email               String                  @unique
+  passwordHash        String
+  platformRole        PlatformRole            @default(USER)
+  active              Boolean                 @default(true)
+  memberships         BarbershopMember[]
+  staffMembers        StaffMember[]
+  gmailOAuthAttempts  GmailOAuthAttempt[]
+  gmailAuthorizations GmailSenderConnection[]
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
 }
 
 model Barbershop {
@@ -83,6 +85,8 @@ model Barbershop {
   logoUrl                String?
   address                String?
   phone                  String?
+  contactEmail           String?                 @db.VarChar(254)
+  senderAlias            String?                 @db.VarChar(32)
   instagram              String?
   officialWebsite        String?
   timezone               String?                 @db.VarChar(255)
@@ -95,6 +99,8 @@ model Barbershop {
   customers              Customer[]
   bookings               Booking[]
   bookingAccessTokens    BookingAccessToken[]
+  gmailOAuthAttempts     GmailOAuthAttempt[]
+  gmailSenderConnection  GmailSenderConnection?
   membershipPlans        MembershipPlan[]
   membershipPlanServices MembershipPlanService[]
   memberships            Membership[]
@@ -243,12 +249,13 @@ model Booking {
   createdAt              DateTime      @default(now())
   updatedAt              DateTime      @updatedAt
 
-  barbershop   Barbershop           @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  customer     Customer             @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  service      Service              @relation("BookingService", fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  chair        Chair                @relation("BookingChair", fields: [chairId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  staffMember  StaffMember?         @relation("BookingStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
-  accessTokens BookingAccessToken[]
+  barbershop         Barbershop           @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  customer           Customer             @relation(fields: [customerId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  service            Service              @relation("BookingService", fields: [serviceId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  chair              Chair                @relation("BookingChair", fields: [chairId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  staffMember        StaffMember?         @relation("BookingStaffMember", fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+  accessTokens       BookingAccessToken[]
+  bookingEmailOutbox BookingEmailOutbox[]
 
   @@unique([id, barbershopId])
   @@index([barbershopId, status, startsAt])
@@ -271,6 +278,65 @@ model BookingAccessToken {
   @@unique([id, barbershopId])
   @@index([barbershopId, bookingId])
   @@index([revokedAt])
+}
+
+// The only copy of a private access code outside a response is AES-GCM
+// encrypted with an application-managed key derived from NEXTAUTH_SECRET.
+// Never store bearer credentials in plaintext email queues or log payloads.
+model BookingEmailOutbox {
+  id                 String    @id @default(uuid())
+  barbershopId       String
+  bookingId          String
+  kind               String    @default("CONFIRMATION") @db.VarChar(20)
+  sealedPayload      String    @db.Text
+  recoveryTokenHash  String?   @unique @db.VarChar(64)
+  recoveryExpiresAt  DateTime? @db.Timestamptz(3)
+  recoveryRedeemedAt DateTime? @db.Timestamptz(3)
+  discardedAt        DateTime? @db.Timestamptz(3)
+  attemptCount       Int       @default(0)
+  nextAttemptAt      DateTime  @default(now()) @db.Timestamptz(3)
+  leaseUntil         DateTime? @db.Timestamptz(3)
+  acceptedAt         DateTime? @db.Timestamptz(3)
+  lastErrorCode      String?   @db.VarChar(32)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+
+  booking Booking @relation(fields: [bookingId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@index([barbershopId, bookingId])
+  @@index([acceptedAt, nextAttemptAt])
+  @@index([leaseUntil])
+}
+
+model GmailOAuthAttempt {
+  stateHash      String    @id @db.VarChar(64)
+  barbershopId   String
+  userId         String
+  sealedVerifier String    @db.Text
+  expiresAt      DateTime  @db.Timestamptz(3)
+  usedAt         DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([barbershopId, expiresAt])
+  @@index([userId, expiresAt])
+}
+
+model GmailSenderConnection {
+  barbershopId       String    @id
+  email              String    @db.VarChar(254)
+  googleSubject      String    @db.VarChar(255)
+  sealedRefreshToken String    @db.Text
+  authorizedByUserId String
+  sendingEnabledAt   DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  authorizedBy User       @relation(fields: [authorizedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([authorizedByUserId])
 }
 
 model MembershipPlan {

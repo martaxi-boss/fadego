@@ -33,6 +33,9 @@ import {
   type RateLimitName,
 } from "../lib/rate-limit"
 import { sourceIpFromHeaders } from "../lib/request-context"
+import { openBookingEmail } from "../lib/booking-email-crypto"
+import { deliverBookingEmail } from "../lib/booking-email"
+import { requestBookingRecovery, redeemBookingRecovery } from "../lib/booking-recovery"
 
 
 const createdShopIds: string[] = []
@@ -205,6 +208,9 @@ const lookup = (
 
 after(async () => {
   if (createdShopIds.length > 0) {
+    await db.bookingEmailOutbox.deleteMany({
+      where: { barbershopId: { in: createdShopIds } },
+    })
     await db.bookingAccessToken.deleteMany({
       where: { barbershopId: { in: createdShopIds } },
     })
@@ -740,6 +746,102 @@ test("database prevents cross-tenant BookingAccessToken references", async () =>
   )
 })
 
+
+test("customer email is mandatory and invalid emails cause no booking side effects", async () => {
+  const fixture = await createFixture("mandatory-email")
+  await addGeneralChair(fixture.shop.id)
+  for (const value of ["", "   ", "invalido", "a@b", "a@invalid domain"]) {
+    const result = await createPublicBooking(
+      {
+        ...publicInput(fixture),
+        customer: {
+          ...publicInput(fixture).customer,
+          email: value,
+        },
+      },
+      { sourceIp: "198.51.100.198", clock: bookingClock, consumeLimit: allowLimit },
+    )
+    assert.deepEqual(result, { ok: false, code: "INVALID_INPUT" })
+  }
+  assert.equal(await db.booking.count({ where: { barbershopId: fixture.shop.id } }), 0)
+  assert.equal(await db.bookingEmailOutbox.count({ where: { barbershopId: fixture.shop.id } }), 0)
+})
+
+test("a booking atomically queues an encrypted one-time email and keeps token hashes private", async () => {
+  const { openBookingEmail } = await import("../lib/booking-email-crypto")
+  const { deliverBookingEmail } = await import("../lib/booking-email")
+  const fixture = await createFixture("confirmation-outbox")
+  await addGeneralChair(fixture.shop.id)
+  const result = await createPublic(fixture)
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+
+  const job = await db.bookingEmailOutbox.findUnique({
+    where: { id: result.emailNotificationId },
+  })
+  assert.ok(job)
+  assert.equal(job.barbershopId, fixture.shop.id)
+  assert.equal(job.attemptCount, 0)
+  assert.equal(job.acceptedAt, null)
+  assert.equal(job.sealedPayload.includes(result.accessCode), false)
+  assert.equal(JSON.stringify(job).includes(result.accessPath), false)
+
+  const decrypted = openBookingEmail(job.sealedPayload)
+  assert.equal(decrypted.email, "maria@example.test")
+  assert.equal(decrypted.accessCode, result.accessCode)
+  assert.equal(decrypted.serviceName, fixture.service.name)
+
+  const observed: string[] = []
+  const accepted = await deliverBookingEmail(result.emailNotificationId, {
+    transport: async (message, id) => {
+      observed.push(message.to, message.subject, message.text, id)
+      return true
+    },
+  })
+  assert.equal(accepted, "accepted")
+  assert.deepEqual(observed.slice(0, 1), ["maria@example.test"])
+  assert.match(observed[2], /Código privado:/)
+  assert.match(observed[2], /\/r\//)
+  assert.ok(observed[2].includes(result.accessCode))
+  const updated = await db.bookingEmailOutbox.findUnique({ where: { id: job.id } })
+  assert.ok(updated?.acceptedAt)
+  assert.equal(updated?.sealedPayload, "", "accepted mail no longer needs the sealed private code")
+  assert.equal(await deliverBookingEmail(job.id, {
+    transport: async () => { throw new Error("Duplicate delivery") },
+  }), "pending")
+
+  const privatePage = await lookup(result.accessCode)
+  assert.equal(privatePage.ok, true)
+  if (privatePage.ok) assert.equal(privatePage.booking.emailDeliveryStatus, "ACCEPTED")
+})
+
+test("failed mail provider attempts are safely retried without losing the booking", async () => {
+  const { deliverBookingEmail } = await import("../lib/booking-email")
+  const fixture = await createFixture("confirmation-retry")
+  await addGeneralChair(fixture.shop.id)
+  const result = await createPublic(fixture)
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(await deliverBookingEmail(result.emailNotificationId, {
+    transport: async () => false,
+  }), "pending")
+  const job = await db.bookingEmailOutbox.findUnique({ where: { id: result.emailNotificationId } })
+  assert.equal(job?.attemptCount, 1)
+  assert.equal(job?.acceptedAt, null)
+  assert.equal(job?.lastErrorCode, "PROVIDER_REFUSED")
+  assert.ok(job?.nextAttemptAt)
+  // Simulate the retry window; no external email API requests in this test.
+  await db.bookingEmailOutbox.update({
+    where: { id: result.emailNotificationId },
+    data: { nextAttemptAt: new Date("2000-01-01T00:00:00.000Z") },
+  })
+  const accepted = await deliverBookingEmail(result.emailNotificationId, {
+    transport: async () => true,
+  })
+  assert.equal(accepted, "accepted")
+  assert.equal(await db.booking.count({ where: { barbershopId: fixture.shop.id } }), 1)
+})
+
 test("public booking requires no customer authentication identity", () => {
   const parsed = publicBookingInputSchema.safeParse({
     barbershopSlug: "example-shop",
@@ -748,7 +850,7 @@ test("public booking requires no customer authentication identity", () => {
     customer: {
       name: "No Account",
       phone: "+12025550123",
-      email: "",
+      email: "noconta@example.test",
     },
   })
 
@@ -985,7 +1087,7 @@ test("public application surfaces wire canonical availability to booking and kee
   assert.match(privatePage, /dynamic = "force-dynamic"/)
   assert.match(
     privatePage,
-    /Guarda este acesso para cancelar ou remarcar a tua marcação/,
+    /Guarda este link privado para consultar, cancelar ou remarcar a tua marcação/,
   )
   assert.equal(privatePage.includes("cancelBookingByCustomer"), false)
   assert.equal(privatePage.includes("rescheduleBooking"), false)
@@ -1026,4 +1128,158 @@ test("private booking page does not offer actions after appointment start", asyn
     assert.equal(result.booking.canCancel, false)
     assert.equal(result.booking.canReschedule, false)
   }
+})
+
+
+test("email recovery preserves old link until verified, then rotates token exactly once", async () => {
+  const fixture = await createFixture("recovery-verify")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+  const identifier = {
+    barbershopSlug: fixture.shop.slug,
+    email: " MARIA@EXAMPLE.TEST ",
+    phone: "+34 600 123 456",
+    localDate: "2030-01-07",
+  }
+  const opts = {
+    sourceIp: "198.51.100.101",
+    consumeLimit: allowLimit,
+    providerReady: () => true,
+    now: () => new Date("2029-01-01T00:00:00Z"),
+  }
+  assert.deepEqual(await requestBookingRecovery(identifier, opts), { ok: true })
+  const jobs = await db.bookingEmailOutbox.findMany({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  })
+  assert.equal(jobs.length, 1)
+  assert.equal(jobs[0].recoveryRedeemedAt, null)
+  assert.equal(jobs[0].acceptedAt, null)
+  const recovery = openBookingEmail(jobs[0].sealedPayload)
+  assert.equal(recovery.kind, "RECOVERY")
+  assert.ok(recovery.recoveryToken)
+  assert.equal(recovery.accessCode, undefined)
+  assert.equal(jobs[0].sealedPayload.includes(recovery.recoveryToken), false)
+
+  const lookupOld = await lookup(created.accessCode)
+  assert.equal(lookupOld.ok, true, "recovery request cannot invalidate the old private link")
+  assert.deepEqual(await redeemBookingRecovery(recovery.recoveryToken, {
+    consumeLimit: allowLimit, now: () => new Date("2029-01-01T00:04:00Z"),
+  }), { ok: false, code: "UNAVAILABLE" }, "token cannot redeem before mail acceptance")
+
+  let mailText = ""
+  assert.equal(await deliverBookingEmail(jobs[0].id, {
+    now: () => new Date("2029-01-01T00:05:00Z"),
+    transport: async (mail) => { mailText = mail.text; return true },
+  }), "accepted")
+  assert.match(mailText, /\/recuperar\//)
+  assert.match(mailText, /20 minutos/)
+  assert.ok(mailText.includes(recovery.recoveryToken))
+  assert.ok(!mailText.includes(created.accessCode))
+  assert.equal((await db.bookingEmailOutbox.findUnique({
+    where: { id: jobs[0].id },
+  }))?.sealedPayload, "")
+
+  const redeemed = await redeemBookingRecovery(recovery.recoveryToken, {
+    consumeLimit: allowLimit, now: () => new Date("2029-01-01T00:06:00Z"),
+  })
+  assert.equal(redeemed.ok, true)
+  if (!redeemed.ok) return
+  assert.match(redeemed.accessPath, /^\/r\/[A-Z2-9]{8}$/)
+  assert.notEqual(redeemed.accessPath, created.accessPath)
+  assert.deepEqual(await lookup(created.accessCode), { ok: false, code: "UNAVAILABLE" })
+  assert.equal((await lookup(redeemed.accessPath.slice(3))).ok, true)
+  assert.deepEqual(await redeemBookingRecovery(recovery.recoveryToken, {
+    consumeLimit: allowLimit, now: () => new Date("2029-01-01T00:07:00Z"),
+  }), { ok: false, code: "UNAVAILABLE" })
+  assert.deepEqual(await requestBookingRecovery(identifier, opts), { ok: true })
+  assert.equal(await db.bookingEmailOutbox.count({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  }), 2, "after redemption a new recovery request can be made")
+})
+
+test("simultaneous recovery requests enqueue only one valid link per booking", async () => {
+  const fixture = await createFixture("recovery-concurrency")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+
+  const identifier = {
+    barbershopSlug: fixture.shop.slug,
+    email: "maria@example.test",
+    phone: "+34 600 123 456",
+    localDate: "2030-01-07",
+  }
+  const now = () => new Date("2029-01-01T10:00:00Z")
+  const requests = Array.from({ length: 5 }, (_, index) =>
+    requestBookingRecovery(identifier, {
+      providerReady: () => true,
+      consumeLimit: allowLimit,
+      sourceIp: "198.51.100." + (151 + index),
+      now,
+    }),
+  )
+  const results = await Promise.all(requests)
+  for (const result of results) assert.deepEqual(result, { ok: true })
+
+  const jobs = await db.bookingEmailOutbox.findMany({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  })
+  assert.equal(jobs.length, 1, "parallel callers cannot enqueue duplicate valid links")
+  assert.equal(jobs[0].recoveryRedeemedAt, null)
+  assert.equal(jobs[0].discardedAt, null)
+  assert.equal((await lookup(created.accessCode)).ok, true)
+})
+
+test("recovery does not reveal customer existence and expires before a late email can be sent", async () => {
+  const fixture = await createFixture("recovery-privacy")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+  const req = {
+    barbershopSlug: fixture.shop.slug,
+    email: "maria@example.test",
+    phone: "+34 600 123 456",
+    localDate: "2030-01-07",
+  }
+  const opts = {
+    providerReady: () => true, consumeLimit: allowLimit,
+    sourceIp: "198.51.100.102", now: () => new Date("2029-01-01T10:00:00Z"),
+  }
+  assert.deepEqual(await requestBookingRecovery({ ...req, phone: "+34 999 999 999" }, opts), { ok: true })
+  assert.deepEqual(await requestBookingRecovery({ ...req, email: "absent@example.test" }, opts), { ok: true })
+  assert.deepEqual(await requestBookingRecovery({ ...req, barbershopSlug: "not-a-real-tenant" }, opts), { ok: true })
+  assert.equal(await db.bookingEmailOutbox.count({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  }), 0)
+  assert.deepEqual(await requestBookingRecovery({ ...req, localDate: "2030-02-30" }, opts), {
+    ok: false, code: "INVALID_INPUT",
+  })
+  assert.deepEqual(await requestBookingRecovery(req, {
+    ...opts, providerReady: () => false,
+  }), { ok: false, code: "EMAIL_UNAVAILABLE" })
+  assert.deepEqual(await requestBookingRecovery(req, opts), { ok: true })
+  const pending = await db.bookingEmailOutbox.findFirst({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  })
+  assert.ok(pending)
+  const sealed = openBookingEmail(pending.sealedPayload)
+  assert.ok(sealed.recoveryToken)
+  let attempts = 0
+  assert.equal(await deliverBookingEmail(pending.id, {
+    now: () => new Date("2029-01-01T10:21:00Z"),
+    transport: async () => { attempts++; return true },
+  }), "pending")
+  assert.equal(attempts, 0, "expired links must never be emailed")
+  const expired = await db.bookingEmailOutbox.findUnique({ where: { id: pending.id } })
+  assert.ok(expired?.discardedAt)
+  assert.equal(expired?.sealedPayload, "")
+  assert.equal(expired?.lastErrorCode, "RECOVERY_EXPIRED")
+  assert.deepEqual(await redeemBookingRecovery(sealed.recoveryToken, {
+    consumeLimit: allowLimit, now: () => new Date("2029-01-01T10:22:00Z"),
+  }), { ok: false, code: "UNAVAILABLE" })
+  assert.equal((await lookup(created.accessCode)).ok, true)
 })

@@ -29,10 +29,10 @@ export default function LoginPage() {
             <ArrowLeft className="size-4" aria-hidden="true" /> Voltar ao início
           </Link>
           <div className="mt-9 flex items-center gap-3">
-            <Image src="/fadego-mark.svg" alt="" width={49} height={49} className="size-12 rounded-xl" />
+            <Image src="/fadego-mark.webp" alt="" width={49} height={49} className="size-12 rounded-xl" />
             <div>
               <p className="text-xl font-black leading-none tracking-[-0.06em] text-[#16382d]">FADEGO</p>
-              <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[#64806f]">Barbearia em movimento</p>
+              <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-[#64806f]">Barbearias em movimento</p>
             </div>
           </div>
           <p className="mt-10 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#3b8568]">Área reservada</p>

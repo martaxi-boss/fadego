@@ -36,7 +36,7 @@ export default async function PublicBarbershopPage({
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#f6f8f3] px-5 py-16">
         <section className="w-full max-w-xl rounded-[2rem] border border-[#e0e9e0] bg-white p-8 text-center shadow-sm">
-          <Image src="/fadego-mark.svg" alt="" width={52} height={52} className="mx-auto size-13 rounded-xl" />
+          <Image src="/fadego-mark.webp" alt="" width={52} height={52} className="mx-auto size-13 rounded-xl" />
           <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-[#51846d]">FADEGO</p>
           <h1 className="mt-3 text-2xl font-black tracking-tight text-[#19382d]">Reservas indisponíveis</h1>
           <p className="mt-2 text-sm leading-6 text-[#63796b]">
@@ -52,7 +52,7 @@ export default async function PublicBarbershopPage({
       <div className="mx-auto max-w-3xl">
         <nav className="mb-5 flex items-center justify-between gap-4" aria-label="Marca da plataforma">
           <Link href="/" aria-label="FADEGO — página inicial" className="inline-flex items-center gap-2.5">
-            <Image src="/fadego-mark.svg" alt="" width={34} height={34} className="size-9 rounded-lg" />
+            <Image src="/fadego-mark.webp" alt="" width={34} height={34} className="size-9 rounded-lg" />
             <span className="text-base font-black tracking-[-0.06em] text-[#174333]">FADEGO</span>
           </Link>
           <span className="inline-flex items-center gap-2 text-xs font-semibold text-[#668171]">

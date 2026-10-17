@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { AuthorizationError } from "@/lib/access-policy"
@@ -41,9 +42,13 @@ export default async function AdminHomePage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-4xl px-6 py-16">
-      <p className="text-sm font-semibold tracking-[0.18em] text-gray-500">
-        FADEGO
-      </p>
+      <div className="flex items-center gap-3">
+        <Image src="/fadego-mark.webp" alt="" width={48} height={48} className="size-12 shrink-0 rounded-xl" />
+        <div>
+          <p className="text-lg font-black tracking-[-0.05em] text-[#153c2f]">FADEGO</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#56806b]">Barbearias em movimento</p>
+        </div>
+      </div>
       <h1 className="mt-3 text-3xl font-semibold">{isSuperAdmin ? "Administração FADEGO" : "Escolher barbearia"}</h1>
       <p className="mt-2 text-gray-600">
         Apenas os acessos ativos associados à tua conta são apresentados.

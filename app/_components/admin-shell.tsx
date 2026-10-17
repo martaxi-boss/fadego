@@ -35,7 +35,7 @@ export default function AdminShell({
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-7">
           <div>
             <Link className="inline-flex items-center gap-2.5 text-xl font-black tracking-[-0.06em] text-[#183c2e]" href={homeHref}>
-              <Image src="/fadego-mark.svg" alt="" width={40} height={40} className="size-10 rounded-xl" />
+              <Image src="/fadego-mark.webp" alt="" width={40} height={40} className="size-10 rounded-xl" />
               FADEGO
             </Link>
             <p className="mt-1 text-xs font-semibold text-[#718275]">{scopeLabel}</p>

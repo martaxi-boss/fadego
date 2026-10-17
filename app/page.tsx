@@ -46,10 +46,10 @@ export default function HomePage() {
           style={{background: "radial-gradient(circle at 76% 37%, rgba(139,197,149,.23), transparent 40%),radial-gradient(circle at 6% 82%, rgba(164,189,139,.1), transparent 42%)"}} />
         <header className="relative z-20 mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-5 sm:px-8 lg:py-7">
           <Link href="/" aria-label="FADEGO — início" className="inline-flex min-w-0 items-center gap-3">
-            <Image src="/fadego-mark.svg" alt="" width={46} height={46} priority className="size-11 shrink-0 rounded-xl ring-1 ring-white/15" />
+            <Image src="/fadego-mark.webp" alt="" width={46} height={46} priority className="size-11 shrink-0 rounded-xl ring-1 ring-white/15" />
             <span>
               <span className="block text-xl font-black leading-none tracking-[-0.06em]">FADEGO</span>
-              <span className="mt-1 block text-[9px] font-bold uppercase tracking-[0.18em] text-[#b6d2c2]">Barbearia em movimento</span>
+              <span className="mt-1 block text-[9px] font-bold uppercase tracking-[0.18em] text-[#b6d2c2]">Barbearias em movimento</span>
             </span>
           </Link>
           <nav aria-label="Navegação" className="flex shrink-0 items-center gap-5">

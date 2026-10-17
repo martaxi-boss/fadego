@@ -64,18 +64,18 @@ enum PlatformSubscriptionStatus {
 }
 
 model User {
-  id           String             @id @default(uuid())
-  name         String?
-  email        String             @unique
-  passwordHash String
-  platformRole PlatformRole       @default(USER)
-  active       Boolean            @default(true)
-  memberships  BarbershopMember[]
-  staffMembers StaffMember[]
-  gmailOAuthAttempts GmailOAuthAttempt[]
+  id                  String                  @id @default(uuid())
+  name                String?
+  email               String                  @unique
+  passwordHash        String
+  platformRole        PlatformRole            @default(USER)
+  active              Boolean                 @default(true)
+  memberships         BarbershopMember[]
+  staffMembers        StaffMember[]
+  gmailOAuthAttempts  GmailOAuthAttempt[]
   gmailAuthorizations GmailSenderConnection[]
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
 }
 
 model Barbershop {
@@ -307,15 +307,14 @@ model BookingEmailOutbox {
   @@index([leaseUntil])
 }
 
-
 model GmailOAuthAttempt {
-  stateHash       String    @id @db.VarChar(64)
-  barbershopId    String
-  userId          String
-  sealedVerifier  String    @db.Text
-  expiresAt       DateTime  @db.Timestamptz(3)
-  usedAt          DateTime? @db.Timestamptz(3)
-  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  stateHash      String    @id @db.VarChar(64)
+  barbershopId   String
+  userId         String
+  sealedVerifier String    @db.Text
+  expiresAt      DateTime  @db.Timestamptz(3)
+  usedAt         DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
 
   barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
   user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -325,17 +324,17 @@ model GmailOAuthAttempt {
 }
 
 model GmailSenderConnection {
-  barbershopId        String   @id
-  email               String   @db.VarChar(254)
-  googleSubject       String   @db.VarChar(255)
-  sealedRefreshToken  String   @db.Text
-  authorizedByUserId  String
-  sendingEnabledAt    DateTime? @db.Timestamptz(3)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  barbershopId       String    @id
+  email              String    @db.VarChar(254)
+  googleSubject      String    @db.VarChar(255)
+  sealedRefreshToken String    @db.Text
+  authorizedByUserId String
+  sendingEnabledAt   DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  barbershop  Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  authorizedBy User @relation(fields: [authorizedByUserId], references: [id], onDelete: Restrict)
+  barbershop   Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  authorizedBy User       @relation(fields: [authorizedByUserId], references: [id], onDelete: Restrict)
 
   @@index([authorizedByUserId])
 }

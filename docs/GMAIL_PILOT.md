@@ -76,3 +76,31 @@ O trabalhador Gmail também confirma que a barbearia continua `ACTIVE`
 antes e depois da troca remota de token; suspensões durante a chamada
 bloqueiam o envio. As novas capturas CI incluem os ecrãs de configuração
 de email no computador e no telemóvel, com dados fictícios.
+
+## Ligação do cofre existente ao staging nativo (pré-preparada, sem deploy)
+
+O ambiente de teste não deve voltar a pedir ao Owner as chaves já guardadas.
+As duas unidades systemd de staging (`fadego-staging.service` e
+`fadego-booking-email.service`) leem diretamente, como último
+`EnvironmentFile` opcional, o ficheiro protegido
+`/root/project-secrets/fadego-gmail/oauth.env`. É o gestor de serviços
+systemd (PID 1), ainda com permissões root, que abre o ficheiro antes de
+iniciar os processos com o utilizador isolado `fadego-staging`. Não se
+copia o segredo para o GitHub nem se expõem os seus valores nos logs.
+
+O ficheiro `/etc/fadego-staging/app.env` continua a conter as outras
+variáveis necessárias ao staging (base de dados independente, NextAuth,
+URL HTTPS) e é lido **primeiro**. As definições Gmail do cofre são lidas
+**depois**, de modo que os bloqueios atuais
+`BOOKING_EMAIL_PROVIDER=disabled` e `GMAIL_LIVE_SEND_ENABLED=false`
+prevaleçam. Não criar credenciais Gmail duplicadas no ficheiro de staging.
+Se o cofre não existir, o serviço pode arrancar mas o botão OAuth fica
+indisponível; a operação de envio falha fechada. O verificador seguro
+`scripts/check-gmail-vault.py` tem de devolver `READY` na VPS real
+antes de considerar o piloto operacional.
+
+A futura autorização de envios reais requer procedimento próprio do
+Supervisor, alteração explicitamente aprovada das portas globais, ligação
+OAuth pessoal no FADEGO e consentimento da barbearia; a mera leitura do
+cofre não concede autorização de envio. Nem estas alterações nem os
+ensaios CI instalam unidades systemd ou abrem portas no servidor.

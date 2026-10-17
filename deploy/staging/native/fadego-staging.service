@@ -13,6 +13,9 @@ WorkingDirectory=/srv/fadego-staging/current
 Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1
 EnvironmentFile=/etc/fadego-staging/app.env
+# Read by systemd PID 1 before dropping to fadego-staging; never copied into GitHub.
+# Last env file wins: pilot Gmail remains disabled by its root-only vault gates.
+EnvironmentFile=-/root/project-secrets/fadego-gmail/oauth.env
 ExecStart=/usr/bin/node /srv/fadego-staging/current/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3100
 Restart=on-failure
 RestartSec=6

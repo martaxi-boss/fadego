@@ -78,6 +78,21 @@ test("native deployment requires prior approval and must not install Docker", ()
   assert.match(guide, /sem tocar nos restantes projetos/)
 })
 
+test("systemd loads the root-only existing Gmail vault after staging configuration", () => {
+  const mailService = readFileSync("deploy/staging/native/fadego-booking-email.service", "utf8")
+  const regularFile = "EnvironmentFile=/etc/fadego-staging/app.env"
+  const protectedGmailVault = "EnvironmentFile=-/root/project-secrets/fadego-gmail/oauth.env"
+  for (const unit of [service, mailService]) {
+    assert.ok(unit.includes(regularFile), "Retain staging-specific application credentials")
+    assert.ok(unit.includes(protectedGmailVault), "Read existing OAuth credentials without copying")
+    assert.ok(unit.indexOf(regularFile) < unit.indexOf(protectedGmailVault),
+      "Fail-closed vault send gates must override staging defaults")
+    assert.match(unit, /User=fadego-staging/)
+    assert.match(unit, /ProtectHome=yes/)
+    assert.doesNotMatch(unit, /Environment=GOOGLE_GMAIL_CLIENT_(ID|SECRET)/)
+  }
+})
+
 test("mail retries have their own restricted staging systemd unit", () => {
   const service = readFileSync("deploy/staging/native/fadego-booking-email.service", "utf8")
   const timer = readFileSync("deploy/staging/native/fadego-booking-email.timer", "utf8")

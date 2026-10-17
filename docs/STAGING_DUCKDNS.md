@@ -320,3 +320,20 @@ do fornecedor, domínio e identidade do remetente, custos, regras RGPD,
 prova real de entrega e autorização do Supervisor continuam a ser
 Human Gates existentes. SMS e recuperação de password **administrativa**
 permanecem fora do âmbito deste fluxo de clientes.
+
+## Ligação Gmail de testes sem repetir a configuração Google
+
+As unidades systemd nativas na revisão candidata carregam o cofre Gmail
+`/root/project-secrets/fadego-gmail/oauth.env` diretamente como último
+`EnvironmentFile` opcional, apenas quando forem instaladas com a aprovação
+já exigida ao Supervisor. O serviço é iniciado como `fadego-staging` e não
+precisa de ler a pasta privada de root: é o gestor systemd que lê o ficheiro.
+Os segredos não são copiados para o repositório, para comandos do terminal
+nem para ficheiros publicáveis. A ausência do cofre deixa o OAuth indisponível.
+
+Antes da instalação, um operador com acesso autorizado confirma, sem mostrar
+valores, a resposta `FADEGO_GMAIL_VAULT=READY` do verificador seguro. O
+`app.env` permanece responsável pelos segredos **não Gmail** e pela URL HTTPS.
+Os bloqueios `disabled/false` do cofre prevalecem: **ligar a conta Google
+não ativa o envio de mensagens**. Só usar o Gmail já criado para o piloto;
+não contratar outro fornecedor nem criar um novo projeto Floot.

@@ -133,7 +133,10 @@ const resolvePrivateAccess = async (
     },
   })
 
-  if (!token || token.revokedAt || isBookingAccessExpired(token.booking.endsAt, now)) {
+  if (
+    !token || token.revokedAt || !token.barbershop.timezone ||
+    isBookingAccessExpired(token.booking.endsAt, now)
+  ) {
     return null
   }
 

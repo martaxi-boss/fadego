@@ -169,8 +169,9 @@ Não há aprovação de integração/deploy registada em \`AGENTS.md\`, pelo que
 - O \`FADEGO_TRUST_PROXY_HOPS=0\` mantém-se até validar explicitamente a
   topologia e sanitização de cabeçalhos. Os limites por origem partilhada
   não podem ser considerados controlo antiautomação suficiente em produção.
-- Envio de email **apenas após** aprovação do remetente, domínio verificado,
-  chave do cofre e teste real de receção. Sem SMS automático, pagamentos reais,
+- Envio de email **apenas após** OAuth ao Gmail próprio da barbearia,
+  consentimento do titular, aprovação específica, cofre validado e teste
+  de receção autorizado. O domínio de email FADEGO não é requisito do piloto. Sem SMS automático, pagamentos reais,
   utilizadores reais ou indexação pública neste ambiente.
 - O \`AGENTS.md\` continua a proibir deploy/release sem autoridade do
   Supervisor. A escolha do hostname e a confirmação do IP pelo Owner não

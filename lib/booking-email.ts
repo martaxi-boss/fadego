@@ -8,8 +8,8 @@ import { bookingAccessPath } from "@/lib/booking-access"
 import { gmailLiveSendReady } from "@/lib/gmail-oauth"
 import { gmailTenantReady, sendAuthorizedGmailBooking } from "@/lib/gmail-delivery"
 
-// Explicitly opt in to one vetted transactional provider. This module cannot
-// send emails without the Owner-approved credentials from the VPS vault.
+// Gmail is the sole operational booking sender for FADEGO barbershops.
+// The historical verified-domain adapter is preserved but cannot be activated.
 export type BookingEmailTransport = (
   message: { from: string; to: string; subject: string; text: string; replyTo?: string },
   idempotencyKey: string,
@@ -24,30 +24,14 @@ type BookingEmailEnvironment = {
 }
 
 export const bookingEmailProviderReady = (env: BookingEmailEnvironment = process.env) => {
-  const from = env.BOOKING_EMAIL_FROM?.trim() || ""
-  const origin = env.NEXTAUTH_URL?.trim() || ""
-  const key = env.BOOKING_EMAIL_API_KEY || ""
-  if (env.BOOKING_EMAIL_PROVIDER === "gmail") {
-    return gmailLiveSendReady(env) && !!env.NEXTAUTH_SECRET &&
-      Buffer.byteLength(env.NEXTAUTH_SECRET) >= 32
-  }
-  if (env.BOOKING_EMAIL_PROVIDER !== "resend" || key.length < 16) return false
-  if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(from)) return false
-  if (!env.NEXTAUTH_SECRET || Buffer.byteLength(env.NEXTAUTH_SECRET) < 32) return false
-  try {
-    const url = new URL(origin)
-    return url.protocol === "https:" && !!url.hostname &&
-      !url.username && !url.password && !url.search && !url.hash &&
-      url.pathname === "/" && !url.port
-  } catch {
-    return false
-  }
+  // Legacy transactional credentials cannot activate a non-Gmail sender.
+  if (env.BOOKING_EMAIL_PROVIDER !== "gmail") return false
+  return gmailLiveSendReady(env) && !!env.NEXTAUTH_SECRET &&
+    Buffer.byteLength(env.NEXTAUTH_SECRET) >= 32
 }
 
 export const bookingEmailReadyForTenant = async (slug: string) =>
-  process.env.BOOKING_EMAIL_PROVIDER === "gmail"
-    ? gmailTenantReady(slug)
-    : bookingEmailProviderReady()
+  gmailTenantReady(slug)
 
 const line = (value: string) => value
   .replace(/[\r\n\t\x00-\x1f\x7f]+/g, " ")
@@ -177,7 +161,8 @@ export const bookingConfirmationMessage = (
 }
 
 export const sendWithResend: BookingEmailTransport = async (mail, id) => {
-  if (!bookingEmailProviderReady()) return false
+  // Historical adapter only: the current Gmail-only policy makes this unreachable.
+  if (process.env.BOOKING_EMAIL_PROVIDER !== "resend" || !bookingEmailProviderReady()) return false
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",

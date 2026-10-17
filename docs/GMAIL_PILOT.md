@@ -2,7 +2,7 @@
 
 ## Objetivo e limites
 
-Cada barbearia pode escolher **o seu próprio Gmail** para enviar confirmações a clientes. A ligação só é iniciada pelo OWNER/ADMIN da barbearia, no FADEGO. As respostas podem ir para o email de contacto configurado. **Nem ligar o Gmail nem publicar a aplicação envia automaticamente mensagens.**
+Cada barbearia tem de ligar **o seu próprio Gmail** para enviar confirmações a clientes; não existe outro fornecedor autorizado neste piloto. A ligação só é iniciada pelo OWNER/ADMIN da barbearia, no FADEGO. As respostas podem ir para o email de contacto configurado. **Nem ligar o Gmail nem publicar a aplicação envia automaticamente mensagens.**
 
 O piloto usa apenas a permissão sensível `https://www.googleapis.com/auth/gmail.send` (mais `openid email` para confirmar qual a conta ligada). Não permite ler mensagens. Não se pede uma palavra-passe de Gmail, nem se guardam códigos de autorização em logs.
 
@@ -20,7 +20,7 @@ O piloto usa apenas a permissão sensível `https://www.googleapis.com/auth/gmai
 - Cada ligação é isolada pelo `barbershopId`; os tentativos OAuth só valem para o mesmo administrador que os iniciou durante dez minutos; o `state` é de utilização única. Reconectar substitui a conta e volta a desativar o envio.
 - O botão **Pausar** remove autorização local de envio. **Desligar Gmail** apaga a credencial cifrada da base FADEGO; o titular pode também revogar autorização em [Conta Google → Ligações com apps de terceiros](https://myaccount.google.com/connections).
 - O envio via Gmail usa `users.messages.send` com mensagem MIME UTF-8 e `From` correspondente ao email autorizado. Em caso de resposta ambígua da API, não reenvia automaticamente para impedir mensagens duplicadas. O histórico da app marca `GMAIL_UNCERTAIN`; verificar manualmente a caixa `Enviados`.
-- A quota gratuita e os limites anti-spam do Gmail **não tornam a conta indicada adequada para envios comerciais em grande escala**. Antes da comercialização, rever limites, Google API User Data Policy, RGPD, política de privacidade, verificação OAuth e um fornecedor transacional profissional.
+- A quota gratuita e os limites anti-spam do Gmail **não tornam a conta indicada adequada para envios comerciais em grande escala**. Antes da comercialização, rever limites, Google API User Data Policy, RGPD, política de privacidade e verificação OAuth. Se o volume não for compatível, pedir nova decisão do Owner; não integrar outro fornecedor por iniciativa técnica.
 
 Fontes oficiais:
 - [Gmail API — scopes](https://developers.google.com/workspace/gmail/api/auth/scopes)
@@ -44,10 +44,10 @@ da barbearia no ecrã de consentimento da Google**, mas não é um contacto
 exposto no catálogo público de reservas e nunca é usado como remetente
 das mensagens de outra barbearia.
 
-O código conserva internamente dois transportes históricos, mas **o painel
-do piloto mostra apenas Gmail próprio por barbearia**; o transporte
-transacional do domínio está inativo e reservado para uma decisão
-futura do Owner. `BOOKING_EMAIL_PROVIDER` é global e permanece
+O código conserva o adaptador transacional antigo apenas por histórico;
+**a execução ativa aceita exclusivamente Gmail próprio por barbearia**,
+mesmo que restem credenciais de outro fornecedor. O painel também mostra
+apenas Gmail. Qualquer alternativa exige nova decisão expressa do Owner. `BOOKING_EMAIL_PROVIDER` é global e permanece
 `disabled` no primeiro arranque, tal como
 `GMAIL_LIVE_SEND_ENABLED=false`. Um subdomínio não cria uma caixa
 de correio nem é necessário pagar um email separado por barbearia.

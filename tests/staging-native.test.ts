@@ -8,6 +8,14 @@ const https = readFileSync("deploy/staging/native/nginx-https.conf", "utf8")
 const config = readFileSync("deploy/staging/native/runtime.env.example", "utf8")
 const guide = readFileSync("docs/STAGING_DUCKDNS.md", "utf8")
 
+test("developer sample is Gmail-only and keeps all real sends disabled", () => {
+  const sample = readFileSync(".env.example", "utf8")
+  assert.match(sample, /^BOOKING_EMAIL_PROVIDER=disabled$/m)
+  assert.match(sample, /^GMAIL_LIVE_SEND_ENABLED=false$/m)
+  assert.match(sample, /^GOOGLE_GMAIL_CLIENT_ID=$/m)
+  assert.doesNotMatch(sample, /^BOOKING_EMAIL_(FROM|API_KEY)=/m)
+})
+
 test("native staging runs unprivileged and on localhost only", () => {
   assert.match(service, /User=fadego-staging/)
   assert.match(service, /Group=fadego-staging/)

@@ -49,21 +49,30 @@ test("email confirmation contains a usable private booking link and no HTML inje
   assert.equal("html" in message, false)
 })
 
-test("booking email provider fails closed before activation and rejects HTTP or malformed sender", () => {
-  const configured = {
-    BOOKING_EMAIL_PROVIDER: "resend",
-    BOOKING_EMAIL_FROM: "reservas@example.test",
-    BOOKING_EMAIL_API_KEY: "re_test_only_not_real",
+test("Gmail-only readiness rejects legacy credentials and insecure configuration", () => {
+  const gmail = {
+    BOOKING_EMAIL_PROVIDER: "gmail",
+    GOOGLE_GMAIL_CLIENT_ID: "ci-test.apps.googleusercontent.com",
+    GOOGLE_GMAIL_CLIENT_SECRET: "ci-test-not-a-real-client-secret",
+    GMAIL_TOKEN_ENCRYPTION_SECRET: "ci-test-encryption-key-" + "Z".repeat(32),
+    GMAIL_LIVE_SEND_ENABLED: "true",
     NEXTAUTH_SECRET: secret,
     NEXTAUTH_URL: "https://fadego.duckdns.org",
   }
+  const oldProvider = {
+    ...gmail,
+    BOOKING_EMAIL_PROVIDER: "resend",
+    BOOKING_EMAIL_FROM: "reservas@example.test",
+    BOOKING_EMAIL_API_KEY: "re_test_only_not_real",
+  }
   assert.equal(bookingEmailProviderReady({}), false)
-  assert.equal(bookingEmailProviderReady(configured), true)
-  assert.equal(bookingEmailProviderReady({ ...configured, NEXTAUTH_URL: "http://fadego.duckdns.org" }), false)
-  assert.equal(bookingEmailProviderReady({ ...configured, NEXTAUTH_URL: "https://fadego.duckdns.org/a" }), false)
-  assert.equal(bookingEmailProviderReady({ ...configured, BOOKING_EMAIL_FROM: "forged\nBcc:bad@example.test" }), false)
-  assert.equal(bookingEmailProviderReady({ ...configured, BOOKING_EMAIL_API_KEY: "" }), false)
-  assert.equal(bookingEmailProviderReady({ ...configured, BOOKING_EMAIL_PROVIDER: "disabled" }), false)
+  assert.equal(bookingEmailProviderReady(gmail), true)
+  assert.equal(bookingEmailProviderReady(oldProvider), false)
+  assert.equal(bookingEmailProviderReady({ ...gmail, BOOKING_EMAIL_PROVIDER: "disabled" }), false)
+  assert.equal(bookingEmailProviderReady({ ...gmail, GMAIL_LIVE_SEND_ENABLED: "false" }), false)
+  assert.equal(bookingEmailProviderReady({ ...gmail, NEXTAUTH_SECRET: "too-short" }), false)
+  assert.equal(bookingEmailProviderReady({ ...gmail, NEXTAUTH_URL: "http://fadego.duckdns.org" }), false)
+  assert.equal(bookingEmailProviderReady({ ...gmail, NEXTAUTH_URL: "https://fadego.duckdns.org/a" }), false)
 })
 
 

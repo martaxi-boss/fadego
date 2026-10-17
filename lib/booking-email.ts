@@ -19,6 +19,10 @@ type BookingEmailEnvironment = {
   BOOKING_EMAIL_PROVIDER?: string
   BOOKING_EMAIL_FROM?: string
   BOOKING_EMAIL_API_KEY?: string
+  GOOGLE_GMAIL_CLIENT_ID?: string
+  GOOGLE_GMAIL_CLIENT_SECRET?: string
+  GMAIL_TOKEN_ENCRYPTION_SECRET?: string
+  GMAIL_LIVE_SEND_ENABLED?: string
   NEXTAUTH_SECRET?: string
   NEXTAUTH_URL?: string
 }

@@ -88,3 +88,24 @@ test("reschedule and cancellation notices state the correct time and retain the 
   assert.doesNotMatch(cancelled.text, /altera o horário ou cancela/)
   assert.match(cancelled.text, /\/r\/ABCDEFGH/)
 })
+
+
+test("recovery email contains a one-use link without the original booking access code", () => {
+  const recovery = bookingConfirmationMessage(
+    { ...payload, accessCode: undefined, kind: "RECOVERY", recoveryToken: "Z".repeat(43) },
+    "https://fadego.duckdns.org",
+    "reservas@example.test",
+  )
+  assert.match(recovery.subject, /recuperar acesso/)
+  assert.match(recovery.text, /\/recuperar\/Z{43}/)
+  assert.doesNotMatch(recovery.text, /\/r\/ABCDEFGH/)
+  assert.match(recovery.text, /ignora a mensagem/)
+  assert.throws(() => sealBookingEmail({
+    ...payload, kind: "RECOVERY", recoveryToken: "Z".repeat(43),
+  }, secret), /INVALID_RECOVERY_ACCESS_TOKEN/, "recovery payload cannot contain a private booking code")
+  const token = sealBookingEmail({
+    ...payload, kind: "RECOVERY", accessCode: undefined,
+    recoveryToken: "Z".repeat(43),
+  }, secret)
+  assert.equal(openBookingEmail(token, secret).recoveryToken, "Z".repeat(43))
+})

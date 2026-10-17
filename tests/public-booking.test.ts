@@ -33,6 +33,9 @@ import {
   type RateLimitName,
 } from "../lib/rate-limit"
 import { sourceIpFromHeaders } from "../lib/request-context"
+import { openBookingEmail } from "../lib/booking-email-crypto"
+import { deliverBookingEmail } from "../lib/booking-email"
+import { requestBookingRecovery, redeemBookingRecovery } from "../lib/booking-recovery"
 
 
 const createdShopIds: string[] = []
@@ -1125,4 +1128,124 @@ test("private booking page does not offer actions after appointment start", asyn
     assert.equal(result.booking.canCancel, false)
     assert.equal(result.booking.canReschedule, false)
   }
+})
+
+
+test("email recovery preserves old link until verified, then rotates token exactly once", async () => {
+  const fixture = await createFixture("recovery-verify")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+  const identifier = {
+    barbershopSlug: fixture.shop.slug,
+    email: " MARIA@EXAMPLE.TEST ",
+    phone: "+34 600 123 456",
+    localDate: "2030-01-07",
+  }
+  const opts = {
+    sourceIp: "198.51.100.101",
+    consumeLimit: allowLimit,
+    providerReady: () => true,
+    now: () => new Date("2029-01-01T00:00:00Z"),
+  }
+  assert.deepEqual(await requestBookingRecovery(identifier, opts), { ok: true })
+  const jobs = await db.bookingEmailOutbox.findMany({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  })
+  assert.equal(jobs.length, 1)
+  assert.equal(jobs[0].recoveryRedeemedAt, null)
+  assert.equal(jobs[0].acceptedAt, null)
+  const recovery = openBookingEmail(jobs[0].sealedPayload)
+  assert.equal(recovery.kind, "RECOVERY")
+  assert.ok(recovery.recoveryToken)
+  assert.equal(recovery.accessCode, undefined)
+  assert.equal(jobs[0].sealedPayload.includes(recovery.recoveryToken), false)
+
+  const lookupOld = await lookup(created.accessCode)
+  assert.equal(lookupOld.ok, true, "recovery request cannot invalidate the old private link")
+  assert.deepEqual(await redeemBookingRecovery(recovery.recoveryToken, {
+    consumeLimit: allowLimit, now: () => new Date("2029-01-01T00:04:00Z"),
+  }), { ok: false, code: "UNAVAILABLE" }, "token cannot redeem before mail acceptance")
+
+  let mailText = ""
+  assert.equal(await deliverBookingEmail(jobs[0].id, {
+    now: () => new Date("2029-01-01T00:05:00Z"),
+    transport: async (mail) => { mailText = mail.text; return true },
+  }), "accepted")
+  assert.match(mailText, /\/recuperar\//)
+  assert.match(mailText, /20 minutos/)
+  assert.ok(mailText.includes(recovery.recoveryToken))
+  assert.ok(!mailText.includes(created.accessCode))
+  assert.equal((await db.bookingEmailOutbox.findUnique({
+    where: { id: jobs[0].id },
+  }))?.sealedPayload, "")
+
+  const redeemed = await redeemBookingRecovery(recovery.recoveryToken, {
+    consumeLimit: allowLimit, now: () => new Date("2029-01-01T00:06:00Z"),
+  })
+  assert.equal(redeemed.ok, true)
+  if (!redeemed.ok) return
+  assert.match(redeemed.accessPath, /^\/r\/[A-Z2-9]{8}$/)
+  assert.notEqual(redeemed.accessPath, created.accessPath)
+  assert.deepEqual(await lookup(created.accessCode), { ok: false, code: "UNAVAILABLE" })
+  assert.equal((await lookup(redeemed.accessPath.slice(3))).ok, true)
+  assert.deepEqual(await redeemBookingRecovery(recovery.recoveryToken, {
+    consumeLimit: allowLimit, now: () => new Date("2029-01-01T00:07:00Z"),
+  }), { ok: false, code: "UNAVAILABLE" })
+  assert.deepEqual(await requestBookingRecovery(identifier, opts), { ok: true })
+  assert.equal(await db.bookingEmailOutbox.count({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  }), 2, "after redemption a new recovery request can be made")
+})
+
+test("recovery does not reveal customer existence and expires before a late email can be sent", async () => {
+  const fixture = await createFixture("recovery-privacy")
+  await addGeneralChair(fixture.shop.id)
+  const created = await createPublic(fixture)
+  assert.equal(created.ok, true)
+  if (!created.ok) return
+  const req = {
+    barbershopSlug: fixture.shop.slug,
+    email: "maria@example.test",
+    phone: "+34 600 123 456",
+    localDate: "2030-01-07",
+  }
+  const opts = {
+    providerReady: () => true, consumeLimit: allowLimit,
+    sourceIp: "198.51.100.102", now: () => new Date("2029-01-01T10:00:00Z"),
+  }
+  assert.deepEqual(await requestBookingRecovery({ ...req, phone: "+34 999 999 999" }, opts), { ok: true })
+  assert.deepEqual(await requestBookingRecovery({ ...req, email: "absent@example.test" }, opts), { ok: true })
+  assert.deepEqual(await requestBookingRecovery({ ...req, barbershopSlug: "not-a-real-tenant" }, opts), { ok: true })
+  assert.equal(await db.bookingEmailOutbox.count({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  }), 0)
+  assert.deepEqual(await requestBookingRecovery({ ...req, localDate: "2030-02-30" }, opts), {
+    ok: false, code: "INVALID_INPUT",
+  })
+  assert.deepEqual(await requestBookingRecovery(req, {
+    ...opts, providerReady: () => false,
+  }), { ok: false, code: "EMAIL_UNAVAILABLE" })
+  assert.deepEqual(await requestBookingRecovery(req, opts), { ok: true })
+  const pending = await db.bookingEmailOutbox.findFirst({
+    where: { barbershopId: fixture.shop.id, kind: "RECOVERY" },
+  })
+  assert.ok(pending)
+  const sealed = openBookingEmail(pending.sealedPayload)
+  assert.ok(sealed.recoveryToken)
+  let attempts = 0
+  assert.equal(await deliverBookingEmail(pending.id, {
+    now: () => new Date("2029-01-01T10:21:00Z"),
+    transport: async () => { attempts++; return true },
+  }), "pending")
+  assert.equal(attempts, 0, "expired links must never be emailed")
+  const expired = await db.bookingEmailOutbox.findUnique({ where: { id: pending.id } })
+  assert.ok(expired?.discardedAt)
+  assert.equal(expired?.sealedPayload, "")
+  assert.equal(expired?.lastErrorCode, "RECOVERY_EXPIRED")
+  assert.deepEqual(await redeemBookingRecovery(sealed.recoveryToken, {
+    consumeLimit: allowLimit, now: () => new Date("2029-01-01T10:22:00Z"),
+  }), { ok: false, code: "UNAVAILABLE" })
+  assert.equal((await lookup(created.accessCode)).ok, true)
 })

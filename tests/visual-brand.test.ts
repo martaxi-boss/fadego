@@ -60,3 +60,19 @@ test("booking form requires valid email and describes private actions", () => {
   assert.match(flow, /para consultar, remarcar ou cancelar/)
   assert.match(flow, /EMAIL_UNAVAILABLE/)
 })
+
+
+test("email recovery UI is available without an account and redemption requires a click", () => {
+  const booking = readFileSync("app/b/[slug]/public-booking-flow.tsx", "utf8")
+  const requestPage = readFileSync("app/b/[slug]/recuperar/recovery-form.tsx", "utf8")
+  const confirmPage = readFileSync("app/recuperar/[token]/confirm-recovery.tsx", "utf8")
+  const metadata = readFileSync("app/recuperar/[token]/page.tsx", "utf8")
+  assert.match(booking, /Recuperar a marcação por email/)
+  assert.match(requestPage, /name="email"/)
+  assert.match(requestPage, /name="phone"/)
+  assert.match(requestPage, /name="localDate"/)
+  assert.match(confirmPage, /onClick=\{redeem\}/)
+  assert.match(confirmPage, /router\.replace\(result\.accessPath\)/)
+  assert.match(metadata, /referrer: "no-referrer"/)
+  assert.match(metadata, /index: false/)
+})

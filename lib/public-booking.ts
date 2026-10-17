@@ -566,7 +566,12 @@ export const lookupPrivateBooking = async (
           serviceDurationMinutes: true,
           customerNameSnapshot: true,
           staffNameSnapshot: true,
-          bookingEmailOutbox: { select: { acceptedAt: true } },
+          bookingEmailOutbox: {
+            where: { kind: "CONFIRMATION" },
+            take: 1,
+            orderBy: { createdAt: "asc" },
+            select: { acceptedAt: true },
+          },
         },
       },
     },
@@ -600,8 +605,8 @@ export const lookupPrivateBooking = async (
       durationMinutes: access.booking.serviceDurationMinutes,
       professionalName: access.booking.staffNameSnapshot,
       customerName: access.booking.customerNameSnapshot,
-      emailDeliveryStatus: access.booking.bookingEmailOutbox
-        ? access.booking.bookingEmailOutbox.acceptedAt ? "ACCEPTED" : "PENDING"
+      emailDeliveryStatus: access.booking.bookingEmailOutbox[0]
+        ? access.booking.bookingEmailOutbox[0].acceptedAt ? "ACCEPTED" : "PENDING"
         : "NOT_APPLICABLE",
       canCancel:
         access.booking.startsAt > now &&

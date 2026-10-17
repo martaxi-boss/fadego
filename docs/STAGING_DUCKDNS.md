@@ -165,6 +165,10 @@ Não há aprovação de integração/deploy registada em \`AGENTS.md\`, pelo que
 
 - O Nginx nativo **não** pode abrir outra porta 80/443 nem substituir
   configurações de outros sites.
+- O callback Google `/api/integrations/gmail/callback` transporta `code` e
+  `state` na query string; o bloco exato do Nginx mantém Basic Auth e
+  desliga `access_log` para não guardar códigos OAuth. Os links privados
+  de marcações e recuperação continuam igualmente excluídos dos logs.
 - A aplicação responde apenas em \`127.0.0.1:3100\`, não em \`0.0.0.0\`.
 - O \`FADEGO_TRUST_PROXY_HOPS=0\` mantém-se até validar explicitamente a
   topologia e sanitização de cabeçalhos. Os limites por origem partilhada

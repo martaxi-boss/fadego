@@ -119,8 +119,18 @@ test("mail retries have their own restricted staging systemd unit", () => {
   assert.doesNotMatch(service, /ExecStart=.*(sudo|docker)/)
 })
 
-test("private bearer URLs are excluded from staging Nginx access logs", () => {
-  assert.match(https, /location ~ \^\/\(r\|recuperar\|api\/private\/bookings\|api\/public\/recovery\)\//)
-  assert.match(https, /access_log off;/)
-  assert.match(https, /proxy_set_header Authorization "";/)
+test("Gmail OAuth callback and private booking URLs are excluded from Nginx logs", () => {
+  const oauth = https.split("location = /api/integrations/gmail/callback {")[1]?.split("}")[0]
+  assert.ok(oauth, "Google code and state must have a dedicated exact-match block")
+  assert.ok(oauth.includes("access_log off;"))
+  assert.ok(oauth.includes("proxy_pass http://127.0.0.1:3100;"))
+  assert.ok(oauth.includes('proxy_set_header Authorization "";'))
+  assert.ok(!oauth.includes("auth_basic off;"))
+
+  const privateUrl = https.split(
+    "location ~ ^/(r|recuperar|api/private/bookings|api/public/recovery)/ {",
+  )[1]?.split("}")[0]
+  assert.ok(privateUrl, "Booking and recovery URLs need their own protected block")
+  assert.ok(privateUrl.includes("access_log off;"))
+  assert.ok(privateUrl.includes('proxy_set_header Authorization "";'))
 })

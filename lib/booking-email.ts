@@ -55,11 +55,34 @@ export const bookingConfirmationMessage = (
     dateStyle: "full",
     timeStyle: "short",
   }).format(when)
+  const kind = payload.kind ?? "CONFIRMATION"
+  if (kind === "RECOVERY") {
+    if (!payload.recoveryToken) throw new Error("INVALID_RECOVERY_ACCESS_TOKEN")
+    const link = new URL("/recuperar/" + payload.recoveryToken, origin).toString()
+    return {
+      from,
+      to: payload.email,
+      subject: "FADEGO — recuperar acesso à tua marcação",
+      text: [
+        "Olá " + line(payload.customerName) + ",",
+        "",
+        "Foi pedido um novo acesso à tua marcação.",
+        "Barbearia: " + line(payload.barbershopName),
+        "Para confirmar e recuperar o acesso, abre este link:",
+        link,
+        "",
+        "O link expira em 20 minutos e só pode ser usado uma vez.",
+        "O acesso anterior só é substituído quando confirmas a recuperação.",
+        "Se não fizeste este pedido, ignora a mensagem: não foi feita nenhuma alteração.",
+        "FADEGO",
+      ].join("\n"),
+    }
+  }
+  if (!payload.accessCode) throw new Error("INVALID_PRIVATE_ACCESS_CODE")
   const link = new URL(
     bookingAccessPath(payload.accessCode),
     origin,
   ).toString()
-  const kind = payload.kind ?? "CONFIRMATION"
   const previousTime = payload.previousStartsAt
     ? new Intl.DateTimeFormat("pt-PT", {
         timeZone: payload.timezone,

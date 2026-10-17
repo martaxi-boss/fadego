@@ -11,8 +11,9 @@ const payloadSchema = z.object({
   serviceName: z.string().min(1).max(200),
   startsAt: z.string().datetime(),
   timezone: z.string().min(1).max(100),
-  accessCode: z.string().length(8),
-  kind: z.enum(["CONFIRMATION", "RESCHEDULED", "CANCELLED"]).optional(),
+  accessCode: z.string().length(8).optional(),
+  recoveryToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional(),
+  kind: z.enum(["CONFIRMATION", "RESCHEDULED", "CANCELLED", "RECOVERY"]).optional(),
   previousStartsAt: z.string().datetime().optional(),
 })
 
@@ -38,7 +39,14 @@ export const sealBookingEmail = (
   secret: string | undefined = process.env.NEXTAUTH_SECRET,
 ) => {
   const payload = payloadSchema.parse(raw)
-  if (!canonicalizeAccessCode(payload.accessCode)) {
+  if (payload.kind === "RECOVERY") {
+    if (!payload.recoveryToken || payload.accessCode) {
+      throw new Error("INVALID_RECOVERY_ACCESS_TOKEN")
+    }
+  } else if (
+    !payload.accessCode || !canonicalizeAccessCode(payload.accessCode) ||
+    payload.recoveryToken
+  ) {
     throw new Error("INVALID_PRIVATE_ACCESS_CODE")
   }
 

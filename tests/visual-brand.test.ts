@@ -76,3 +76,11 @@ test("email recovery UI is available without an account and redemption requires 
   assert.match(metadata, /referrer: "no-referrer"/)
   assert.match(metadata, /index: false/)
 })
+
+
+test("the CI visual gallery includes account-free recovery on desktop and mobile", () => {
+  const screenshotScript = readFileSync("scripts/ci-capture-ux.cjs", "utf8")
+  assert.match(screenshotScript, /15-recuperacao-desktop\.jpg/)
+  assert.match(screenshotScript, /16-recuperacao-mobile\.jpg/)
+  assert.match(screenshotScript, /\/b\/atelier-fadego-demo\/recuperar/)
+})

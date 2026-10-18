@@ -19,7 +19,7 @@ export default async function TenantOverviewPage({
   if (access.membership.role === "STAFF") {
     redirect("/admin/" + access.barbershop.slug + "/barbeiro")
   }
-  const isManager = true
+  const isManager = access.membership.role !== "STAFF"
   const modules = tenantModulesForRole(access.membership.role)
   const shopId = access.barbershop.id
 

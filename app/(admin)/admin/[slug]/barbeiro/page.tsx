@@ -7,6 +7,7 @@ import {
   localAgendaDate, resolveAgendaTimezone,
 } from "@/lib/admin-agenda"
 import { resolveStaffPanelTarget } from "@/lib/staff-panel-policy"
+import { cancelBarberBookingAction, finishBarberBookingAction } from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -29,7 +30,7 @@ export default async function BarberPersonalPage({
   params, searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ date?: string | string[]; professional?: string | string[] }>
+  searchParams: Promise<{ date?: string | string[]; professional?: string | string[]; notice?: string }>
 }) {
   const { slug } = await params
   const query = await searchParams
@@ -179,6 +180,33 @@ export default async function BarberPersonalPage({
         ) : null}
       </header>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <Link href={"/admin/" + slug + "/barbeiro/planeamento?" +
+          new URLSearchParams({ professional: professional.id, date }).toString()}
+          className="rounded-xl bg-[#205a3f] px-5 py-3 text-sm font-bold text-white">
+          <CalendarDays className="mr-2 inline size-4" aria-hidden />
+          Nova marcação · Horários · Folgas
+        </Link>
+        {query.notice ? (
+          <p role="status" className="rounded-xl border border-[#d3e9d8] bg-[#f1faf3] px-4 py-3 text-sm font-semibold text-[#20583b]">
+            {({
+              created: "Marcação confirmada; email enviado.",
+              queued: "Marcação registada; email em fila de envio.",
+              rescheduled: "Marcação reagendada.",
+              cancelled: "Marcação cancelada.",
+              finished: "Estado da marcação atualizado.",
+              hours: "Horário pessoal atualizado.",
+              blocked: "Indisponibilidade registada.",
+              unblocked: "Indisponibilidade removida.",
+              occupied: "Existem marcações ou bloqueios nesse período; não foi alterado.",
+              email: "É preciso ligar o Gmail da barbearia antes de aceitar novas reservas.",
+              limit: "Demasiadas operações. Tenta daqui a pouco.",
+              unavailable: "A operação foi recusada; verifica data, serviço e disponibilidade.",
+            } as Record<string, string>)[query.notice] ?? "Consulta a agenda para confirmar o estado."}
+          </p>
+        ) : null}
+      </div>
+
       <section aria-label="Resumo das marcações" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { label: "Marcações do dia", value: dayBookings.length, icon: CalendarDays },
@@ -235,6 +263,42 @@ export default async function BarberPersonalPage({
                 <p className="mt-1 text-xs text-gray-500">
                   Cadeira {booking.chairNumberSnapshot} · {statusLabels[booking.status]}
                 </p>
+                {booking.status === "CONFIRMED" ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {booking.startsAt > new Date() ? (
+                      <>
+                        <Link
+                          href={"/admin/" + slug + "/barbeiro/remarcar/" + booking.id + "?" +
+                            new URLSearchParams({ professional: professional.id, date }).toString()}
+                          className="rounded-lg border border-[#a9c9b3] px-3 py-2 text-xs font-bold text-[#205d40]">
+                          Reagendar
+                        </Link>
+                        <form action={cancelBarberBookingAction.bind(null, slug, professional.id, booking.id, date)}>
+                          <button type="submit"
+                            className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-800">
+                            Cancelar
+                          </button>
+                        </form>
+                      </>
+                    ) : null}
+                    {booking.endsAt <= new Date() ? (
+                      <>
+                        <form action={finishBarberBookingAction.bind(null,
+                          slug, professional.id, booking.id, date, "COMPLETED")}>
+                          <button type="submit" className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-bold text-[#25613d]">
+                            Concluir
+                          </button>
+                        </form>
+                        <form action={finishBarberBookingAction.bind(null,
+                          slug, professional.id, booking.id, date, "NO_SHOW")}>
+                          <button type="submit" className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-bold">
+                            Falta
+                          </button>
+                        </form>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </article>
           ))}
@@ -248,9 +312,9 @@ export default async function BarberPersonalPage({
         </div>
       </section>
       <p className="text-xs leading-6 text-gray-500">
-        Este é o painel individual, com consulta de marcações. Alterar horários,
-        cancelar reservas, configurar cadeiras e gerir pagamentos continuam operações
-        reservadas à administração da barbearia.
+        Esta agenda permite gerir as próprias marcações, pausas e folgas quando
+        o negócio está apto a receber reservas. Preços, cadeiras, Gmail,
+        pagamentos e outras agendas continuam sob controlo da administração.
       </p>
     </div>
   )

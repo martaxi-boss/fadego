@@ -266,10 +266,28 @@ async function main() {
       "STAFF individual panel must never expose customer email")
     for (const action of ["Reatribuir", "Concluir", "Não compareceu"]) {
       assert.equal(await staff.getByRole("button", { name: action, exact: true }).count(), 0,
-        "STAFF must not receive privileged agenda action: " + action)
+        "STAFF must not receive privileged administrative action: " + action)
     }
-    assert.equal(await staff.getByRole("button", { name: /Cancelar marcação de/ }).count(), 0,
-      "STAFF must not receive cancellation actions")
+    assert.equal(await staff.getByRole("button", { name: "Cancelar", exact: true }).count(), 1,
+      "STAFF can only cancel the own confirmed appointment displayed")
+    assert.equal(await staff.getByRole("link", { name: "Reagendar", exact: true }).count(), 1,
+      "STAFF has scoped rescheduling rather than access to the full agenda")
+
+    await open(staff, "/admin/" + shopB + "/barbeiro/planeamento?date=2030-05-20")
+    await assertCoreAccessibility(staff, "Barber personal scheduling")
+    const personalPlanning = await staff.locator("main").innerText()
+    assert.match(personalPlanning, /Adicionar marcação de cliente/)
+    assert.match(personalPlanning, /Horário semanal do profissional/)
+    assert.match(personalPlanning, /Pausas, férias e indisponibilidade/)
+    assert.equal(await staff.getByRole("button", { name: "Confirmar marcação e enviar email" }).isDisabled(), true,
+      "CI email off: staff must not create an unnotified private booking")
+    assert.ok(!personalPlanning.includes(privateCustomer),
+      "Barber planning must never show general customer names")
+
+    await open(staff, "/admin/" + shopB + "/barbeiro?date=2030-05-20")
+    await open(staff, "/admin/" + shopB + "/professionals/convites")
+    assert.equal(route(staff), "/admin/" + shopB + "/barbeiro",
+      "STAFF must not issue or inspect invitations")
 
     // A manually typed administrative URL must not bypass the individual panel.
     await open(staff, "/admin/" + shopB + "/agenda?date=2030-05-20")

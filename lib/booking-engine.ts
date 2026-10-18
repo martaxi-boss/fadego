@@ -5,6 +5,7 @@ import type {
 } from "@prisma/client"
 import { db } from "@/lib/prisma"
 import { acquireTenantBookingLock } from "@/lib/tenant-booking-lock"
+import { staffSlotAllowed } from "@/lib/staff-schedule"
 
 export type BookingEngineErrorCode =
   | "TENANT_UNAVAILABLE"
@@ -458,6 +459,16 @@ const allocateStaffChair = async (
     fail("STAFF_UNAVAILABLE")
   }
 
+  const timezone = await tx.barbershop.findUnique({
+    where: { id: barbershopId },
+    select: { timezone: true },
+  })
+  if (!timezone?.timezone ||
+      !(await staffSlotAllowed(tx, barbershopId, staffMemberId,
+        timezone.timezone, startsAt, endsAt))) {
+    fail("NO_CAPACITY")
+  }
+
   if (
     await staffHasConflict(
       tx,
@@ -679,10 +690,14 @@ const cancelBooking = async (
   cancellationStatus: "CANCELLED_BY_CUSTOMER" | "CANCELLED_BY_SHOP",
   clock: BookingClock = systemBookingClock,
   onUpdated?: BookingMutationHook,
+  expectedStaffMemberId?: string,
 ) =>
   runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockBooking(tx, barbershopId, bookingId)
+    if (expectedStaffMemberId && current.staffMemberId !== expectedStaffMemberId) {
+      fail("BOOKING_UNAVAILABLE")
+    }
 
     if (
       current.status !== "CONFIRMED" &&
@@ -721,7 +736,10 @@ export const cancelBookingByCustomer = (
 export const cancelBookingByShop = (
   barbershopId: string,
   bookingId: string,
-) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_SHOP")
+  expectedStaffMemberId?: string,
+  onUpdated?: BookingMutationHook,
+) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_SHOP", undefined,
+    onUpdated, expectedStaffMemberId)
 
 export const rescheduleBooking = async (
   barbershopId: string,
@@ -729,10 +747,14 @@ export const rescheduleBooking = async (
   startsAtInput: Date,
   clock: BookingClock = systemBookingClock,
   onUpdated?: BookingMutationHook,
+  expectedStaffMemberId?: string,
 ) =>
   runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockBooking(tx, barbershopId, bookingId)
+    if (expectedStaffMemberId && current.staffMemberId !== expectedStaffMemberId) {
+      fail("BOOKING_UNAVAILABLE")
+    }
 
     if (current.status !== "CONFIRMED") {
       fail("INVALID_STATUS")
@@ -904,10 +926,14 @@ export const finalizeBookingByShop = (
   bookingId: string,
   outcome: "COMPLETED" | "NO_SHOW",
   clock: BookingClock = systemBookingClock,
+  expectedStaffMemberId?: string,
 ) =>
   runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const booking = await lockBooking(tx, barbershopId, bookingId)
+    if (expectedStaffMemberId && booking.staffMemberId !== expectedStaffMemberId) {
+      fail("BOOKING_UNAVAILABLE")
+    }
     if (booking.status !== "CONFIRMED") {
       throw new BookingEngineError("INVALID_STATUS")
     }

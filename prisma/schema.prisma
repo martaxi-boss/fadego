@@ -93,6 +93,9 @@ model Barbershop {
   status                 BarbershopStatus        @default(ACTIVE)
   members                BarbershopMember[]
   staffMembers           StaffMember[]
+  staffWeeklyHours       StaffWeeklyHour[]
+  staffScheduleBlocks    StaffScheduleBlock[]
+  staffInvitations       StaffInvitation[]
   chairs                 Chair[]
   services               Service[]
   openingHours           OpeningHour[]
@@ -146,10 +149,69 @@ model StaffMember {
   user       User?      @relation(fields: [userId], references: [id], onDelete: Restrict)
   chairs     Chair[]    @relation("ChairStaffMember")
   bookings   Booking[]  @relation("BookingStaffMember")
+  weeklyHours StaffWeeklyHour[]
+  scheduleBlocks StaffScheduleBlock[]
+  invitations StaffInvitation[]
 
   @@unique([id, barbershopId])
   @@unique([barbershopId, userId])
   @@index([barbershopId, active, archivedAt])
+}
+
+// Weekly barber-specific hours narrow the business opening hours. Absence
+// blocks are expressed as tenant-local date+minutes so DST conversion stays
+// inside the existing booking calendar engine.
+model StaffWeeklyHour {
+  id            String    @id @default(uuid())
+  barbershopId  String
+  staffMemberId String
+  weekday       Int
+  isClosed      Boolean   @default(false)
+  opensAt       Int?
+  closesAt      Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  staffMember StaffMember @relation(fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@unique([barbershopId, staffMemberId, weekday])
+  @@index([barbershopId, staffMemberId])
+}
+
+model StaffScheduleBlock {
+  id            String   @id @default(uuid())
+  barbershopId  String
+  staffMemberId String
+  localDate     String   @db.VarChar(10)
+  startsMinute  Int
+  endsMinute    Int
+  label         String?  @db.VarChar(80)
+  createdAt     DateTime @default(now())
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  staffMember StaffMember @relation(fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@unique([id, barbershopId])
+  @@index([barbershopId, staffMemberId, localDate])
+}
+
+model StaffInvitation {
+  id            String   @id @default(uuid())
+  barbershopId  String
+  staffMemberId String
+  email         String   @db.VarChar(254)
+  tokenHash     String   @unique @db.VarChar(64)
+  expiresAt     DateTime @db.Timestamptz(3)
+  redeemedAt    DateTime? @db.Timestamptz(3)
+  revokedAt     DateTime? @db.Timestamptz(3)
+  createdAt     DateTime @default(now())
+
+  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  staffMember StaffMember @relation(fields: [staffMemberId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@index([barbershopId, staffMemberId, expiresAt])
+  @@index([email, expiresAt])
 }
 
 model Chair {

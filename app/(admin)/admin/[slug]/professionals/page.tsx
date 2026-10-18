@@ -62,6 +62,10 @@ export default async function ProfessionalsPage({
           para que veja apenas a sua própria agenda. Os perfis continuam
           disponíveis mesmo antes de receberem acesso pessoal.
         </p>
+        <Link href={"/admin/" + access.barbershop.slug + "/professionals/convites"}
+          className="mt-4 inline-block rounded-lg bg-[#205c3e] px-4 py-3 text-sm font-bold text-white">
+          Criar e gerir convites individuais
+        </Link>
       </section>
 
       <ConfigNotice notice={firstNotice(query.notice)} />

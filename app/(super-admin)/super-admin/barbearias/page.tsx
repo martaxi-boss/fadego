@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { requireSuperAdmin } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
+import { tenantSubdomainUrl } from "@/lib/tenant-subdomains"
 import { createPlatformShopAction } from "../actions"
 
 export const dynamic = "force-dynamic"
@@ -34,7 +35,7 @@ export default async function PlatformShopsPage({
       where,
       select: {
         id: true, name: true, slug: true, status: true,
-        gmailSenderConnection: { select: { id: true } },
+        gmailSenderConnection: { select: { barbershopId: true } },
         _count: { select: { members: true, chairs: true, services: true } },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -124,7 +125,7 @@ export default async function PlatformShopsPage({
                   {" · "}Gmail: {shop.gmailSenderConnection ? "Ligado" : "Por ligar"}
                 </p>
                 <p className="mt-1 break-all text-xs text-gray-500">
-                  Endereço: /b/{shop.slug} · Subdomínio próprio: pendente
+                  Endereço: /b/{shop.slug} · Subdomínio próprio: {tenantSubdomainUrl(shop.slug) ?? "pendente"}
                 </p>
               </div>
               <Link className="rounded-lg border border-teal-700 px-4 py-2 text-sm font-semibold text-teal-900"

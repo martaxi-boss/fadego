@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { db } from "@/lib/prisma"
+import { tenantBaseDomain, tenantSubdomainUrl } from "@/lib/tenant-subdomains"
 
 export const dynamic = "force-dynamic"
 
@@ -20,7 +21,7 @@ export default async function SuperAdminPage() {
           slug: true,
           status: true,
           createdAt: true,
-          gmailSenderConnection: { select: { id: true } },
+          gmailSenderConnection: { select: { barbershopId: true } },
           _count: { select: { bookings: true, customers: true } },
         },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -97,7 +98,7 @@ export default async function SuperAdminPage() {
               Hoje a página usa um endereço como /b/nome-da-barbearia.
               O subdomínio próprio automático ainda depende de configuração DNS e não está ativo.
             </p>
-            <p className="mt-3 text-xs font-semibold text-amber-800">Subdomínios: pendentes</p>
+            <p className="mt-3 text-xs font-semibold text-amber-800">{tenantBaseDomain() ? "Subdomínios: ativos" : "Subdomínios: pendentes"}</p>
           </div>
           <div className="rounded-2xl border border-gray-200 bg-[#f8faf7] p-5">
             <p className="text-xs font-bold uppercase tracking-widest text-[#567263]">03 · Gmail</p>
@@ -144,7 +145,7 @@ export default async function SuperAdminPage() {
               <div className="min-w-0">
                 <p className="font-bold text-[#173b2b]">{shop.name}</p>
                 <p className="mt-1 break-all text-xs text-[#637468]">
-                  /b/{shop.slug} · {shop.status === "ACTIVE" ? "Ativa" :
+                  {tenantSubdomainUrl(shop.slug) ?? "/b/" + shop.slug} · {shop.status === "ACTIVE" ? "Ativa" :
                     shop.status === "SUSPENDED" ? "Suspensa" : "Arquivada"}
                 </p>
                 <p className="mt-1 text-xs text-[#637468]">

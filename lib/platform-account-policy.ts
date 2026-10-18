@@ -1,12 +1,13 @@
 import { z } from "zod"
 import { adminEmailSchema, barbershopSlugSchema } from "@/lib/validation"
+import { RESERVED_TENANT_LABELS } from "@/lib/tenant-subdomains"
 
 const contactEmail = z.union([adminEmailSchema, z.literal("")])
   .transform((value) => value || null)
 
 export const createPlatformShopSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  slug: barbershopSlugSchema,
+  slug: barbershopSlugSchema.refine((slug) => !RESERVED_TENANT_LABELS.has(slug)),
   ownerEmail: adminEmailSchema,
   contactEmail,
 })

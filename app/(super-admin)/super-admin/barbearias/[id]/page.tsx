@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { db } from "@/lib/prisma"
+import { tenantSubdomainUrl } from "@/lib/tenant-subdomains"
 import { requireSuperAdmin } from "@/lib/authorization"
 import { platformIdSchema } from "@/lib/platform-account-policy"
 import {
@@ -86,7 +87,9 @@ export default async function PlatformShopDetailsPage({
               {shop.status === "ACTIVE"
                 ? "Página pública disponível neste endereço."
                 : "Endereço reservado. A página pública só fica disponível após ativação."}
-              {" "}O subdomínio próprio ainda não está ligado ao DNS.
+              {" "}{tenantSubdomainUrl(shop.slug)
+                ? "Subdomínio próprio: " + tenantSubdomainUrl(shop.slug)
+                : "O subdomínio próprio ainda não está ligado ao DNS."}
             </p>
             {shop.status === "ACTIVE" ? (
               <Link className="mt-3 inline-block text-sm font-semibold text-[#21603c] underline underline-offset-4"

@@ -1,5 +1,11 @@
 import { barbershopSlugSchema } from "@/lib/validation"
 
+type TenantEnvironment = {
+  FADEGO_TENANT_BASE_DOMAIN?: string
+  FADEGO_TENANT_SUBDOMAINS_READY?: string
+  NEXTAUTH_URL?: string
+}
+
 export const RESERVED_TENANT_LABELS = new Set([
   "admin", "api", "app", "auth", "cliente", "clientes", "equipa", "gmail",
   "login", "mail", "portal", "reservas", "suporte", "www",
@@ -9,7 +15,7 @@ const domainLabel = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 
 // A wildcard TLS/DNS + trusted reverse proxy must be certified *before*
 // activating this toggle in an environment. It performs no external DNS writes.
-export const tenantBaseDomain = (env: NodeJS.ProcessEnv = process.env): string | null => {
+export const tenantBaseDomain = (env: TenantEnvironment = process.env): string | null => {
   if (env.FADEGO_TENANT_SUBDOMAINS_READY !== "true") return null
   const value = env.FADEGO_TENANT_BASE_DOMAIN?.trim().toLowerCase() ?? ""
   if (!value || value.length > 253) return null
@@ -33,7 +39,7 @@ export const tenantBaseDomain = (env: NodeJS.ProcessEnv = process.env): string |
 }
 
 export const tenantSubdomainUrl = (
-  slug: string, env: NodeJS.ProcessEnv = process.env,
+  slug: string, env: TenantEnvironment = process.env,
 ): string | null => {
   const base = tenantBaseDomain(env)
   if (!base || !barbershopSlugSchema.safeParse(slug).success ||

@@ -119,7 +119,7 @@ export default async function AgendaPage({
       ? item.staffMemberId === null
       : item.staffMemberId === selectedProfessional),
   )
-  const canManage = access.membership.role !== "STAFF"
+  const canManage = access.membership.role === "OWNER" || access.membership.role === "ADMIN"
   const canViewContacts = canViewCustomerContactDetails(access.membership.role)
   const hour = new Intl.DateTimeFormat("pt-PT", {
     timeZone,

@@ -185,10 +185,11 @@ export async function linkStaffAccountAction(
   if (!staffId.success || (userId !== null && !userId.success)) {
     redirectNotice(access.barbershop.slug, "professionals", "invalid")
   }
+  const validatedUserId: string | null = userId === null ? null
+    : userId.success ? userId.data
+    : redirectNotice(access.barbershop.slug, "professionals", "invalid")
   try {
-    await linkStaffAccount(
-      access.barbershop.id, staffId.data, userId === null ? null : userId.data,
-    )
+    await linkStaffAccount(access.barbershop.id, staffId.data, validatedUserId)
   } catch (error) {
     if (error instanceof StaffAccountLinkError) {
       redirectNotice(access.barbershop.slug, "professionals", "assignment")

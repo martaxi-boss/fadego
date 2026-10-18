@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import Link from "next/link"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
@@ -49,6 +50,10 @@ export default async function AgendaPage({
   const { slug } = await params
   const query = await searchParams
   const access = await requireBarbershopBySlug(slug, ["OWNER", "ADMIN", "STAFF"])
+  // Personal staff access uses a separate, appointment-scoped dashboard.
+  if (access.membership.role === "STAFF") {
+    redirect("/admin/" + access.barbershop.slug + "/barbeiro")
+  }
   const shop = await db.barbershop.findUnique({
     where: { id: access.barbershop.id },
     select: { timezone: true },

@@ -78,7 +78,7 @@ export default async function BusinessSpacePage({
               O funcionário entra com o seu próprio acesso e consulta a agenda
               do negócio. Não vê os clientes e os emails privados de outras barbearias.
             </p>
-            <a href={centralUrl("/admin/" + shop.slug + "/agenda")}
+            <a href={centralUrl("/admin/" + shop.slug + "/barbeiro")}
               className="mt-5 inline-block rounded-lg border border-[#9bbda8] px-4 py-3 text-sm font-bold text-[#205137]">
               Abrir agenda da equipa
             </a>

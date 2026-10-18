@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import ConfigNotice from "@/app/_components/config-notice"
 import ClubMembershipSection from "./membership-section"
 import { requireBarbershopBySlug } from "@/lib/authorization"
@@ -29,6 +30,10 @@ export default async function ClubPlansPage({
     "ADMIN",
     "STAFF",
   ])
+  // Personal staff access uses a separate, appointment-scoped dashboard.
+  if (access.membership.role === "STAFF") {
+    redirect("/admin/" + access.barbershop.slug + "/barbeiro")
+  }
   const canManage =
     access.membership.role === "OWNER" || access.membership.role === "ADMIN"
 

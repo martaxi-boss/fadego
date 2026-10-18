@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { tenantModulesForRole } from "@/lib/admin-navigation"
 import { tenantSubdomainUrl } from "@/lib/tenant-subdomains"
@@ -15,7 +16,10 @@ export default async function TenantOverviewPage({
     "ADMIN",
     "STAFF",
   ])
-  const isManager = access.membership.role !== "STAFF"
+  if (access.membership.role === "STAFF") {
+    redirect("/admin/" + access.barbershop.slug + "/barbeiro")
+  }
+  const isManager = true
   const modules = tenantModulesForRole(access.membership.role)
   const shopId = access.barbershop.id
 
@@ -61,6 +65,12 @@ export default async function TenantOverviewPage({
               Gerir Gmail
             </Link>
           ) : null}
+          <Link
+            className="rounded-xl border border-white/40 px-5 py-3 text-sm font-bold text-white"
+            href={"/admin/" + slug + "/barbeiro"}
+          >
+            Ver painéis dos barbeiros
+          </Link>
         </div>
       </header>
 

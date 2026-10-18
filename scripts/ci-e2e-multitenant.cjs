@@ -253,11 +253,17 @@ async function main() {
     assert.match(staffShops, /Barbearia Norte/)
     assert.ok(!staffShops.includes("Atelier FADEGO"), "STAFF must not list tenant A")
 
-    await open(staff, "/admin/" + shopB + "/agenda?date=2030-05-20")
-    await assertCoreAccessibility(staff, "STAFF agenda")
-    const staffAgenda = await staff.locator("main").innerText()
-    assert.match(staffAgenda, /Cliente Norte Fictício/)
-    assert.ok(!staffAgenda.includes(privatePhone), "STAFF agenda must redact phone")
+    await open(staff, "/admin/" + shopB + "/barbeiro?date=2030-05-20")
+    await assertCoreAccessibility(staff, "STAFF individual panel")
+    const personalAgenda = await staff.locator("main").innerText()
+    assert.match(personalAgenda, /Cliente do Barbeiro CI/,
+      "STAFF must see the booking assigned to the authenticated professional")
+    assert.ok(!personalAgenda.includes(privateCustomer),
+      "STAFF dashboard excludes other clients' bookings even in the same tenant")
+    assert.ok(!personalAgenda.includes(privatePhone),
+      "STAFF individual panel must never expose customer contacts")
+    assert.ok(!personalAgenda.includes("barbeiro-cliente@example.test"),
+      "STAFF individual panel must never expose customer email")
     for (const action of ["Reatribuir", "Concluir", "Não compareceu"]) {
       assert.equal(await staff.getByRole("button", { name: action, exact: true }).count(), 0,
         "STAFF must not receive privileged agenda action: " + action)
@@ -265,10 +271,18 @@ async function main() {
     assert.equal(await staff.getByRole("button", { name: /Cancelar marcação de/ }).count(), 0,
       "STAFF must not receive cancellation actions")
 
+    // A manually typed administrative URL must not bypass the individual panel.
+    await open(staff, "/admin/" + shopB + "/agenda?date=2030-05-20")
+    assert.equal(route(staff), "/admin/" + shopB + "/barbeiro",
+      "STAFF full agenda must redirect to the scoped individual panel")
+    assert.ok(!(await staff.locator("main").innerText()).includes(privateCustomer),
+      "STAFF must not read the general booking via a direct admin URL")
     await open(staff, "/admin/" + shopB + "/club")
-    const staffClub = await staff.locator("main").innerText()
-    assert.match(staffClub, /Cliente Norte Fictício/)
-    assert.ok(!staffClub.includes(privatePhone), "STAFF Club must redact phone")
+    assert.equal(route(staff), "/admin/" + shopB + "/barbeiro",
+      "STAFF must not open Club administration")
+    await open(staff, "/admin/" + shopB + "/professionals")
+    assert.equal(route(staff), "/admin/" + shopB + "/barbeiro",
+      "STAFF must not open other professional profiles or account links")
 
     assert.equal(await staff.locator('a[href="/admin/' + shopB + '/contact"]').count(), 0,
       "STAFF must not see mailbox administration")
@@ -283,7 +297,7 @@ async function main() {
     await assertNoPrivateCustomer(staff, "STAFF unauthorized tenant")
     await staffContext.close()
 
-    console.log("FADEGO E2E tenant isolation PASS: OWNER agenda workflow, STAFF restrictions, browser form accessibility, mandatory booking email and cross-tenant redaction.")
+    console.log("FADEGO E2E tenant isolation PASS: OWNER agenda, STAFF own-booking isolation and admin-route denial, booking email and cross-tenant redaction.")
   } finally {
     await browser.close()
   }

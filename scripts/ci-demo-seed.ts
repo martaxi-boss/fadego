@@ -240,6 +240,42 @@ async function main() {
       chairNumberSnapshot: northChair.number,
     },
   })
+  // One real STAFF login is bound to one operational professional. A separate
+  // general booking remains hidden from that individual's personal dashboard.
+  const northProfessional = await db.staffMember.create({
+    data: {
+      barbershopId: northShop.id, userId: staffLogin.id,
+      name: "Barbeiro Norte CI", active: true,
+    },
+  })
+  const northStaffChair = await db.chair.create({
+    data: {
+      barbershopId: northShop.id, number: 2, mode: "STAFF_BOOKING",
+      staffMemberId: northProfessional.id,
+    },
+  })
+  const northStaffCustomer = await db.customer.create({
+    data: {
+      barbershopId: northShop.id, name: "Cliente do Barbeiro CI",
+      phone: "+351 910 000 099", email: "barbeiro-cliente@example.test",
+    },
+  })
+  await db.booking.create({
+    data: {
+      barbershopId: northShop.id, customerId: northStaffCustomer.id,
+      serviceId: northService.id, chairId: northStaffChair.id,
+      staffMemberId: northProfessional.id, mode: "STAFF_BOOKING",
+      startsAt: at(12), endsAt: at(12, 30), status: "CONFIRMED",
+      serviceNameSnapshot: northService.name,
+      serviceDurationMinutes: northService.durationMinutes,
+      servicePriceSnapshot: northService.price,
+      customerNameSnapshot: northStaffCustomer.name,
+      customerPhoneSnapshot: northStaffCustomer.phone,
+      customerEmailSnapshot: northStaffCustomer.email,
+      staffNameSnapshot: northProfessional.name,
+      chairNumberSnapshot: northStaffChair.number,
+    },
+  })
   const northPlan = await db.membershipPlan.create({
     data: {
       barbershopId: northShop.id,

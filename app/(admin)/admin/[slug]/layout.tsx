@@ -25,15 +25,19 @@ export default async function TenantAdminLayout({
   }
 
   const { barbershop, membership } = access
-  const homeHref = `/admin/${barbershop.slug}`
+  const homeHref = membership.role === "STAFF"
+    ? `/admin/${barbershop.slug}/barbeiro`
+    : `/admin/${barbershop.slug}`
 
   return (
     <AdminShell
       heading={barbershop.name}
       homeHref={homeHref}
       navigation={[
-        { href: homeHref, label: "Visão geral" },
-        ...tenantModulesForRole(membership.role).map((module) => ({
+        { href: homeHref, label: membership.role === "STAFF" ? "O meu painel" : "Visão geral" },
+        ...tenantModulesForRole(membership.role)
+          .filter((module) => membership.role !== "STAFF" || module.href !== "barbeiro")
+          .map((module) => ({
           href: `${homeHref}/${module.href}`,
           label: module.label,
         })),

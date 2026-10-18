@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { AuthorizationError } from "@/lib/access-policy"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
+import { linkStaffAccount, StaffAccountLinkError } from "@/lib/staff-account-link"
 import {
   createChairConfiguration,
   createServiceConfiguration,
@@ -169,6 +170,31 @@ export async function updateStaffMemberAction(
     )
   }
 
+  finishWrite(access.barbershop.slug, "professionals")
+}
+
+// Linking a login to a professional changes only this business's staff profile.
+// The user must already have an active STAFF membership and verified credentials.
+export async function linkStaffAccountAction(
+  rawSlug: string, rawStaffId: string, formData: FormData,
+) {
+  const access = await requireWriteAccess(rawSlug, "professionals")
+  const staffId = resourceIdSchema.safeParse(rawStaffId)
+  const rawUserId = formText(formData, "userId")
+  const userId = rawUserId === "" ? null : resourceIdSchema.safeParse(rawUserId)
+  if (!staffId.success || (userId !== null && !userId.success)) {
+    redirectNotice(access.barbershop.slug, "professionals", "invalid")
+  }
+  try {
+    await linkStaffAccount(
+      access.barbershop.id, staffId.data, userId === null ? null : userId.data,
+    )
+  } catch (error) {
+    if (error instanceof StaffAccountLinkError) {
+      redirectNotice(access.barbershop.slug, "professionals", "assignment")
+    }
+    throw error
+  }
   finishWrite(access.barbershop.slug, "professionals")
 }
 

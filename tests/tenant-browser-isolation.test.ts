@@ -8,11 +8,12 @@ test("the customer directory denies STAFF on the server without leaking an inter
   assert.match(source, /if \(error instanceof AuthorizationError\) notFound\(\)/)
 })
 
-test("the browser rehearsal covers owner membership, STAFF contact masking and tenant separation", () => {
+test("the browser rehearsal covers owner membership, STAFF individual-booking isolation and tenant separation", () => {
   const script = readFileSync("scripts/ci-e2e-multitenant.cjs", "utf8")
   assert.match(script, /ci-staff-north@fadego\.example/)
   assert.match(script, /assertNoPrivateCustomer/)
-  assert.match(script, /STAFF agenda must redact phone/)
-  assert.match(script, /STAFF Club must redact phone/)
+  assert.match(script, /STAFF dashboard excludes other clients/)
+  assert.match(script, /STAFF individual panel must never expose customer contacts/)
   assert.match(script, /response\.status\(\), 404/)
+  assert.match(script, /STAFF full agenda must redirect to the scoped individual panel/)
 })

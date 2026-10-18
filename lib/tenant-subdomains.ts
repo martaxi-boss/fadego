@@ -70,7 +70,7 @@ export const tenantHostRoute = (slug: string, path: string): TenantHostRoute => 
   if (path === "/marcar") return { kind: "rewrite", path: "/b/" + slug }
   if (path === "/cliente") return { kind: "rewrite", path: "/b/" + slug + "/recuperar" }
   if (path === "/gestao") return { kind: "platform-redirect", path: "/admin/" + slug }
-  if (path === "/equipa") return { kind: "platform-redirect", path: "/admin/" + slug + "/agenda" }
+  if (path === "/equipa") return { kind: "platform-redirect", path: "/admin/" + slug + "/barbeiro" }
   if (path === "/login") return { kind: "platform-redirect", path: "/login?acesso=equipa" }
   if (path === "/b/" + slug || path === "/b/" + slug + "/recuperar" ||
       path === "/espaco/" + slug) {

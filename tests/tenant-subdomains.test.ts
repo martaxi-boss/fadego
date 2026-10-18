@@ -43,7 +43,7 @@ test("portal, workers, customers and public booking have distinct scoped destina
     ["/marcar", "rewrite", "/b/norte"],
     ["/cliente", "rewrite", "/b/norte/recuperar"],
     ["/gestao", "platform-redirect", "/admin/norte"],
-    ["/equipa", "platform-redirect", "/admin/norte/agenda"],
+    ["/equipa", "platform-redirect", "/admin/norte/barbeiro"],
     ["/login", "platform-redirect", "/login?acesso=equipa"],
     ["/b/norte", "next", undefined],
     ["/b/norte/recuperar", "next", undefined],
@@ -85,7 +85,7 @@ test("tenant hub keeps business roles apart from the public client flow", () => 
   assert.match(hub, /Recuperar reserva/)
   assert.match(hub, /Área da equipa/)
   assert.match(hub, /admin\/" \+ shop\.slug/)
-  assert.match(hub, /admin\/" \+ shop\.slug \+ "\/agenda/)
+  assert.match(hub, /admin\/" \+ shop\.slug \+ "\/barbeiro/)
   assert.match(panel, /isManager = access\.membership\.role !== "STAFF"/)
   assert.match(panel, /isManager \? \(/)
   assert.match(panel, /Ligar Gmail do negócio/)

@@ -1,7 +1,7 @@
 import { db } from "@/lib/prisma"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { acquireTenantBookingLock } from "@/lib/tenant-booking-lock"
-import { agendaUtcSearchWindow, isValidAgendaDate } from "@/lib/admin-agenda"
+import { isValidAgendaDate } from "@/lib/admin-agenda"
 import { resolveStaffPanelTarget } from "@/lib/staff-panel-policy"
 import {
   parseMinuteString, staffCalendarParts, staffCalendarWeekday,

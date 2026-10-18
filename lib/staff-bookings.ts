@@ -1,5 +1,4 @@
 import { z } from "zod"
-import { db } from "@/lib/prisma"
 import { bookingEmailReadyForTenant, deliverBookingEmail } from "@/lib/booking-email"
 import { publicCustomerSchema } from "@/lib/public-booking"
 import { issueBookingAccessToken } from "@/lib/booking-access"

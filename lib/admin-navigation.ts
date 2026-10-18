@@ -17,7 +17,7 @@ export const TENANT_ADMIN_MODULES: readonly TenantAdminModule[] = [
   { href: "services", label: "Serviços", detail: "Preços, duração e disponibilidade." },
   { href: "hours", label: "Horários", detail: "Horário semanal da barbearia." },
   { href: "club", label: "Club", detail: "Planos, adesões e gestão das utilizações." },
-  { href: "contact", label: "Email", detail: "Email de contacto e respostas às reservas.", managerOnly: true },
+  { href: "contact", label: "Gmail", detail: "Ligar o Gmail do negócio com a Google e definir o email para respostas.", managerOnly: true },
 ]
 
 export const tenantModulesForRole = (role: TenantAdminRole) =>

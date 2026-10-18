@@ -34,6 +34,7 @@ export default async function PlatformShopsPage({
       where,
       select: {
         id: true, name: true, slug: true, status: true,
+        gmailSenderConnection: { select: { id: true } },
         _count: { select: { members: true, chairs: true, services: true } },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -49,7 +50,8 @@ export default async function PlatformShopsPage({
         <p className="text-xs font-bold uppercase tracking-widest text-teal-300">Portal FADEGO · Plataforma</p>
         <h1 className="mt-2 text-3xl font-semibold">Gestão das barbearias</h1>
         <p className="mt-2 text-sm text-slate-300">
-          Contas independentes, proprietários e permissões. Sem envios reais ou pagamentos.
+          Regista os negócios, atribui um endereço de reservas e gere os acessos.
+          Cada barbearia tem um painel independente. Sem envios reais ou pagamentos.
         </p>
       </header>
       {query.notice && notices[query.notice] ? (
@@ -57,27 +59,39 @@ export default async function PlatformShopsPage({
           {notices[query.notice]}
         </p>
       ) : null}
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section id="nova-barbearia" className="scroll-mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold">Criar barbearia</h2>
         <p className="mt-2 text-sm text-gray-600">
           A nova barbearia fica suspensa. O proprietário indicado fica associado sem acesso
           até à verificação da identidade e configuração das próprias credenciais.
+        </p>
+        <p className="mt-3 rounded-xl bg-[#edf8ef] p-4 text-sm leading-6 text-[#20543b]">
+          Neste ambiente o endereço fica em <strong>fadego.duckdns.org/b/identificador</strong>.
+          Isso reserva uma página do negócio no FADEGO. Subdomínios separados,
+          como nome.fadego.pt, ainda não são criados automaticamente:
+          dependem do domínio e da configuração DNS.
         </p>
         <form action={createPlatformShopAction} className="mt-5 grid gap-4 md:grid-cols-2">
           <label className="text-sm font-semibold">Nome do negócio
             <input name="name" maxLength={120} required
               className="mt-1 block w-full rounded-lg border border-gray-300 p-3" />
           </label>
-          <label className="text-sm font-semibold">Identificador da página
+          <label className="text-sm font-semibold">Identificador do endereço
             <input name="slug" maxLength={63} pattern="[a-z0-9]+(-[a-z0-9]+)*" required
               placeholder="barbearia-exemplo"
               className="mt-1 block w-full rounded-lg border border-gray-300 p-3" />
+            <span className="mt-1 block text-xs font-normal text-gray-600">
+              Exemplo: fadego.duckdns.org/b/barbearia-exemplo
+            </span>
           </label>
           <label className="text-sm font-semibold">Email do proprietário
             <input type="email" name="ownerEmail" maxLength={254} required autoComplete="off"
               className="mt-1 block w-full rounded-lg border border-gray-300 p-3" />
+            <span className="mt-1 block text-xs font-normal text-gray-600">
+              Identifica o proprietário da conta, mas não liga o Gmail de envio.
+            </span>
           </label>
-          <label className="text-sm font-semibold">Email público do negócio (facultativo)
+          <label className="text-sm font-semibold">Email de contacto e respostas (facultativo)
             <input type="email" name="contactEmail" maxLength={254}
               className="mt-1 block w-full rounded-lg border border-gray-300 p-3" />
           </label>
@@ -104,9 +118,13 @@ export default async function PlatformShopsPage({
             <div key={shop.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
               <div className="min-w-0">
                 <p className="font-semibold">{shop.name}</p>
-                <p className="mt-1 break-all text-xs text-gray-600">{shop.slug} · {shop.status}</p>
+                <p className="mt-1 break-all text-xs text-gray-600">{shop.slug} · {shop.status === "ACTIVE" ? "Ativa" : shop.status === "SUSPENDED" ? "Suspensa" : "Arquivada"}</p>
                 <p className="mt-1 text-xs text-gray-500">
                   {shop._count.members} contas · {shop._count.chairs} cadeiras · {shop._count.services} serviços
+                  {" · "}Gmail: {shop.gmailSenderConnection ? "Ligado" : "Por ligar"}
+                </p>
+                <p className="mt-1 break-all text-xs text-gray-500">
+                  Endereço: /b/{shop.slug} · Subdomínio próprio: pendente
                 </p>
               </div>
               <Link className="rounded-lg border border-teal-700 px-4 py-2 text-sm font-semibold text-teal-900"

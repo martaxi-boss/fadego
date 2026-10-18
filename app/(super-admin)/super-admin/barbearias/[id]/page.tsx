@@ -45,6 +45,7 @@ export default async function PlatformShopDetailsPage({
         orderBy: { createdAt: "asc" },
       },
       _count: { select: { chairs: true, services: true, openingHours: true } },
+      gmailSenderConnection: { select: { email: true, sendingEnabledAt: true } },
     },
   })
   if (!shop) notFound()
@@ -60,11 +61,64 @@ export default async function PlatformShopDetailsPage({
       <header className="rounded-3xl bg-slate-950 px-6 py-7 text-white">
         <p className="text-xs font-bold uppercase tracking-widest text-teal-300">Conta de negócio · {shop.status}</p>
         <h1 className="mt-2 text-3xl font-semibold">{shop.name}</h1>
-        <p className="mt-2 break-all text-sm text-slate-300">/b/{shop.slug}</p>
+        <p className="mt-2 break-all text-sm text-slate-300">
+          Página pública: /b/{shop.slug}
+        </p>
         <p className="mt-2 text-sm text-slate-300">
           {shop._count.chairs} cadeiras · {shop._count.services} serviços · {shop._count.openingHours} horários
         </p>
       </header>
+      <section aria-labelledby="shop-setup" className="rounded-2xl border border-[#dce8df] bg-white p-6 shadow-sm">
+        <h2 id="shop-setup" className="text-xl font-bold text-[#173b2b]">
+          Preparação da barbearia
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-[#647569]">
+          A criação do negócio e do endereço público é diferente da ligação ao Gmail.
+          A autorização da conta Google pertence ao dono desta barbearia, no painel dele.
+        </p>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-[#dce8df] bg-[#f6faf6] p-4">
+            <h3 className="text-sm font-bold text-[#214733]">Endereço web da barbearia</h3>
+            <p className="mt-2 break-all text-sm text-[#486353]">
+              https://fadego.duckdns.org/b/{shop.slug}
+            </p>
+            <p className="mt-2 text-xs leading-5 text-[#647569]">
+              {shop.status === "ACTIVE"
+                ? "Página pública disponível neste endereço."
+                : "Endereço reservado. A página pública só fica disponível após ativação."}
+              {" "}O subdomínio próprio ainda não está ligado ao DNS.
+            </p>
+            {shop.status === "ACTIVE" ? (
+              <Link className="mt-3 inline-block text-sm font-semibold text-[#21603c] underline underline-offset-4"
+                href={"/b/" + shop.slug}>
+                Abrir página de reservas →
+              </Link>
+            ) : null}
+          </div>
+          <div className="rounded-xl border border-[#dce8df] bg-[#f6faf6] p-4">
+            <h3 className="text-sm font-bold text-[#214733]">Gmail da barbearia</h3>
+            <p className="mt-2 text-sm text-[#486353]">
+              {shop.gmailSenderConnection
+                ? "Ligado: " + shop.gmailSenderConnection.email
+                : "Ainda não foi ligado um Gmail."}
+            </p>
+            <p className="mt-2 text-xs leading-5 text-[#647569]">
+              O proprietário ou administrador entra no seu próprio painel e abre
+              «Gmail das reservas». A autorização é feita pela Google;
+              não precisas de recolher palavras-passe dos teus clientes.
+            </p>
+            <p className="mt-2 text-xs font-semibold text-amber-800">
+              {shop.gmailSenderConnection?.sendingEnabledAt
+                ? "Envio autorizado nesta conta; sujeito às regras globais da plataforma."
+                : "Envios desta conta ainda não autorizados."}
+            </p>
+          </div>
+        </div>
+        <p className="mt-4 text-xs leading-6 text-[#647569]">
+          Para ativar este negócio, continua a ser necessário um proprietário com acesso
+          ativo, pelo menos uma cadeira, um serviço e horários configurados.
+        </p>
+      </section>
       {query.notice && notices[query.notice] ? (
         <p role="status" className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">
           {notices[query.notice]}

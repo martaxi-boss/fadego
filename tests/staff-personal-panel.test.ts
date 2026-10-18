@@ -64,10 +64,10 @@ test("assigning barber accounts is restricted to active STAFF users in one tenan
 })
 
 test("staff administrative URLs redirect before reading other customers or bookings", () => {
-  for (const module of ["agenda", "chairs", "services", "hours", "club"]) {
-    const source = readFileSync("app/(admin)/admin/[slug]/" + module + "/page.tsx", "utf8")
-    assert.match(source, /if \(access\.membership\.role === "STAFF"\)/, module)
-    assert.match(source, /redirect\("\/admin\/".*?\/barbeiro"\)/, module)
+  for (const section of ["agenda", "chairs", "services", "hours", "club"]) {
+    const source = readFileSync("app/(admin)/admin/[slug]/" + section + "/page.tsx", "utf8")
+    assert.match(source, /if \(access\.membership\.role === "STAFF"\)/, section)
+    assert.match(source, /redirect\("\/admin\/".*?\/barbeiro"\)/, section)
   }
   const professionals = readFileSync("app/(admin)/admin/[slug]/professionals/page.tsx", "utf8")
   assert.match(professionals, /if \(access\.membership\.role === "STAFF"\)/)

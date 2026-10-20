@@ -102,9 +102,15 @@ export default async function PrivateBookingPage({
           </div>
         </dl>
 
-        <div className="mt-7 rounded-xl bg-gray-50 p-4 text-sm leading-6 text-gray-700">
-          Guarda este acesso para cancelar ou remarcar a tua marcação. Podes
-          guardar o link ou fazer uma captura de ecrã.
+        <div role="status" className="mt-7 rounded-xl border border-[#dceadc] bg-[#edf6ed] p-4 text-sm leading-6 text-[#22503a]">
+          {booking.emailDeliveryStatus === "ACCEPTED" ? (
+            <p>O email de confirmação foi aceite para envio. Contém este link privado e o código de acesso. Confirma também a pasta de spam.</p>
+          ) : booking.emailDeliveryStatus === "PENDING" ? (
+            <p>A tua marcação está registada, mas o envio do email está pendente. O FADEGO tentará enviá-lo novamente. Guarda já este link e o código para não perderes o acesso.</p>
+          ) : (
+            <p>Guarda este link privado para consultar, cancelar ou remarcar a tua marcação.</p>
+          )}
+          <p className="mt-2">Não partilhes o link: quem o tiver poderá gerir esta marcação.</p>
         </div>
 
         {booking.status === "NEEDS_REASSIGNMENT" ? (

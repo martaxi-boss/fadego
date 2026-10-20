@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import ConfigNotice from "@/app/_components/config-notice"
 import ClubMembershipSection from "./membership-section"
 import { requireBarbershopBySlug } from "@/lib/authorization"
@@ -20,7 +21,7 @@ export default async function ClubPlansPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ notice?: string | string[] }>
+  searchParams: Promise<{ notice?: string | string[]; membershipPage?: string | string[] }>
 }) {
   const { slug } = await params
   const query = await searchParams
@@ -29,6 +30,10 @@ export default async function ClubPlansPage({
     "ADMIN",
     "STAFF",
   ])
+  // Personal staff access uses a separate, appointment-scoped dashboard.
+  if (access.membership.role === "STAFF") {
+    redirect("/admin/" + access.barbershop.slug + "/barbeiro")
+  }
   const canManage =
     access.membership.role === "OWNER" || access.membership.role === "ADMIN"
 
@@ -199,6 +204,7 @@ export default async function ClubPlansPage({
         barbershopId={access.barbershop.id}
         role={access.membership.role}
         slug={access.barbershop.slug}
+        membershipPage={firstNotice(query.membershipPage)}
       />
 
       <section className="space-y-4">

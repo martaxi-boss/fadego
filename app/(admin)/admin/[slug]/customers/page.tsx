@@ -1,5 +1,8 @@
+import { notFound } from "next/navigation"
+import { AuthorizationError } from "@/lib/access-policy"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
+import { resolveDirectoryPage } from "@/lib/admin-pagination"
 
 export const dynamic = "force-dynamic"
 
@@ -11,12 +14,18 @@ export default async function CustomersPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ q?: string | string[] }>
+  searchParams: Promise<{ q?: string | string[]; page?: string | string[] }>
 }) {
   const { slug } = await params
   const filters = await searchParams
   // Customer directory is not a general STAFF access surface.
-  const access = await requireBarbershopBySlug(slug, ["OWNER", "ADMIN"])
+  let access
+  try {
+    access = await requireBarbershopBySlug(slug, ["OWNER", "ADMIN"])
+  } catch (error) {
+    if (error instanceof AuthorizationError) notFound()
+    throw error
+  }
   const q = text(filters.q)
   const where = {
     barbershopId: access.barbershop.id,
@@ -30,22 +39,26 @@ export default async function CustomersPage({
         }
       : {}),
   }
-  const [customers, total] = await Promise.all([
-    db.customer.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        createdAt: true,
-        _count: { select: { bookings: true, memberships: true } },
-      },
-      orderBy: [{ name: "asc" }, { id: "asc" }],
-      take: 60,
-    }),
-    db.customer.count({ where }),
-  ])
+  const total = await db.customer.count({ where })
+  const pagination = resolveDirectoryPage(filters.page, total)
+  const customers = await db.customer.findMany({
+    where,
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      _count: { select: { bookings: true, memberships: true } },
+    },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+    skip: pagination.skip,
+    take: pagination.take,
+  })
+  const pageHref = (page: number) => {
+    const params = new URLSearchParams({ page: String(page) })
+    if (q) params.set("q", q)
+    return "/admin/" + access.barbershop.slug + "/customers?" + params.toString()
+  }
 
   return (
     <div className="space-y-6">
@@ -93,10 +106,35 @@ export default async function CustomersPage({
             Não existem clientes para esta pesquisa.
           </div>
         ) : null}
-        {total > customers.length ? (
-          <p className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-            A mostrar os primeiros {customers.length} clientes. Refina a pesquisa para encontrar os restantes.
-          </p>
+        {total > 0 ? (
+          <nav aria-label="Páginas de clientes"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4 text-sm shadow-sm">
+            <p className="text-slate-600">
+              A mostrar {pagination.first}–{pagination.last} de {total} clientes
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {pagination.hasPrevious ? (
+                <a href={pageHref(pagination.page - 1)}
+                  className="rounded-lg border border-gray-300 px-3 py-2 font-semibold hover:bg-slate-50">
+                  ← Anterior
+                </a>
+              ) : null}
+              <span aria-current="page" className="rounded-lg bg-slate-950 px-3 py-2 font-semibold text-white">
+                Página {pagination.page} de {pagination.totalPages}
+              </span>
+              {pagination.hasNext ? (
+                <a href={pageHref(pagination.page + 1)}
+                  className="rounded-lg border border-gray-300 px-3 py-2 font-semibold hover:bg-slate-50">
+                  Seguinte →
+                </a>
+              ) : null}
+            </div>
+            {pagination.totalPages > pagination.lastPage ? (
+              <p className="w-full text-xs text-amber-800">
+                Existem mais resultados do que o limite de navegação. Refina a pesquisa para os encontrar.
+              </p>
+            ) : null}
+          </nav>
         ) : null}
       </section>
     </div>

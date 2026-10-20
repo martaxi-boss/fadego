@@ -5,6 +5,7 @@ import type {
 } from "@prisma/client"
 import { db } from "@/lib/prisma"
 import { acquireTenantBookingLock } from "@/lib/tenant-booking-lock"
+import { staffSlotAllowed } from "@/lib/staff-schedule"
 
 export type BookingEngineErrorCode =
   | "TENANT_UNAVAILABLE"
@@ -39,6 +40,14 @@ export type CreateBookingInput = {
 export type BookingClock = {
   now: () => Date
 }
+
+// Optional hooks run INSIDE the same tenant-locked booking transaction.
+// Never contact an external service in this callback.
+export type BookingMutationHook = (
+  tx: Prisma.TransactionClient,
+  updated: Booking,
+  previousStartsAt: Date,
+) => Promise<void>
 
 const systemBookingClock: BookingClock = {
   now: () => new Date(),
@@ -450,6 +459,16 @@ const allocateStaffChair = async (
     fail("STAFF_UNAVAILABLE")
   }
 
+  const timezone = await tx.barbershop.findUnique({
+    where: { id: barbershopId },
+    select: { timezone: true },
+  })
+  if (!timezone?.timezone ||
+      !(await staffSlotAllowed(tx, barbershopId, staffMemberId,
+        timezone.timezone, startsAt, endsAt))) {
+    fail("NO_CAPACITY")
+  }
+
   if (
     await staffHasConflict(
       tx,
@@ -670,10 +689,15 @@ const cancelBooking = async (
   bookingId: string,
   cancellationStatus: "CANCELLED_BY_CUSTOMER" | "CANCELLED_BY_SHOP",
   clock: BookingClock = systemBookingClock,
+  onUpdated?: BookingMutationHook,
+  expectedStaffMemberId?: string,
 ) =>
   runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockBooking(tx, barbershopId, bookingId)
+    if (expectedStaffMemberId && current.staffMemberId !== expectedStaffMemberId) {
+      fail("BOOKING_UNAVAILABLE")
+    }
 
     if (
       current.status !== "CONFIRMED" &&
@@ -687,7 +711,7 @@ const cancelBooking = async (
       fail("ACTION_TOO_LATE")
     }
 
-    return tx.booking.update({
+    const updated = await tx.booking.update({
       where: {
         id_barbershopId: {
           id: bookingId,
@@ -698,28 +722,39 @@ const cancelBooking = async (
         status: cancellationStatus,
       },
     })
+    if (onUpdated) await onUpdated(tx, updated, current.startsAt)
+    return updated
   })
 
 export const cancelBookingByCustomer = (
   barbershopId: string,
   bookingId: string,
   clock: BookingClock = systemBookingClock,
-) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_CUSTOMER", clock)
+  onUpdated?: BookingMutationHook,
+) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_CUSTOMER", clock, onUpdated)
 
 export const cancelBookingByShop = (
   barbershopId: string,
   bookingId: string,
-) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_SHOP")
+  expectedStaffMemberId?: string,
+  onUpdated?: BookingMutationHook,
+) => cancelBooking(barbershopId, bookingId, "CANCELLED_BY_SHOP", undefined,
+    onUpdated, expectedStaffMemberId)
 
 export const rescheduleBooking = async (
   barbershopId: string,
   bookingId: string,
   startsAtInput: Date,
   clock: BookingClock = systemBookingClock,
+  onUpdated?: BookingMutationHook,
+  expectedStaffMemberId?: string,
 ) =>
   runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const current = await lockBooking(tx, barbershopId, bookingId)
+    if (expectedStaffMemberId && current.staffMemberId !== expectedStaffMemberId) {
+      fail("BOOKING_UNAVAILABLE")
+    }
 
     if (current.status !== "CONFIRMED") {
       fail("INVALID_STATUS")
@@ -759,7 +794,7 @@ export const rescheduleBooking = async (
         current.id,
       )
 
-      return tx.booking.update({
+      const updated = await tx.booking.update({
         where: {
           id_barbershopId: {
             id: current.id,
@@ -773,6 +808,8 @@ export const rescheduleBooking = async (
           chairNumberSnapshot: allocation.chair.number,
         },
       })
+      if (onUpdated) await onUpdated(tx, updated, current.startsAt)
+      return updated
     }
 
     const chair = await allocateGeneralChair(
@@ -783,7 +820,7 @@ export const rescheduleBooking = async (
       current.id,
     )
 
-    return tx.booking.update({
+    const updated = await tx.booking.update({
       where: {
         id_barbershopId: {
           id: current.id,
@@ -797,6 +834,8 @@ export const rescheduleBooking = async (
         chairNumberSnapshot: chair.number,
       },
     })
+    if (onUpdated) await onUpdated(tx, updated, current.startsAt)
+    return updated
   })
 
 export const reassignBookingToStaff = async (
@@ -887,10 +926,14 @@ export const finalizeBookingByShop = (
   bookingId: string,
   outcome: "COMPLETED" | "NO_SHOW",
   clock: BookingClock = systemBookingClock,
+  expectedStaffMemberId?: string,
 ) =>
   runBookingMutation(async (tx) => {
     await acquireTenantBookingLock(tx, barbershopId)
     const booking = await lockBooking(tx, barbershopId, bookingId)
+    if (expectedStaffMemberId && booking.staffMemberId !== expectedStaffMemberId) {
+      fail("BOOKING_UNAVAILABLE")
+    }
     if (booking.status !== "CONFIRMED") {
       throw new BookingEngineError("INVALID_STATUS")
     }

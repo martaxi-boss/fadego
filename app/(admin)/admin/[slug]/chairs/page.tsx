@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import { db } from "@/lib/prisma"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import ConfigNotice from "@/app/_components/config-notice"
@@ -26,6 +27,10 @@ export default async function ChairsPage({
     "ADMIN",
     "STAFF",
   ])
+  // Personal staff access uses a separate, appointment-scoped dashboard.
+  if (access.membership.role === "STAFF") {
+    redirect("/admin/" + access.barbershop.slug + "/barbeiro")
+  }
   const canManage =
     access.membership.role === "OWNER" || access.membership.role === "ADMIN"
 

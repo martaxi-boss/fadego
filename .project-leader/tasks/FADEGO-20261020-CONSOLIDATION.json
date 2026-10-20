@@ -1,0 +1,14 @@
+{
+  "task_id": "FADEGO-20261020-CONSOLIDATION",
+  "repository": "martaxi-boss/fadego",
+  "authority_source": "CURRENT_OWNER_OBJECTIVE",
+  "base_sha": "3ada51c477710a6ea1612492cfae82cdf23948f8",
+  "branch": "integration/20261016-fadego-candidate",
+  "objective": "Consolidate the existing barbershop platform, day/week agenda and secure business owner onboarding; validate and prepare private review through the existing GitHub Actions route.",
+  "material_boundaries": ["new business owner activation flow", "additive staging database migration", "private staging deployment"],
+  "implementation_bounds": ["tenant and staff isolation retained", "OWNER invitation only for a pre-created inactive membership", "new-user activation requires explicit onboardingPending marker", "active users must authenticate themselves", "no SUPER_ADMIN invitations or password reset", "token SHA-256, 48 hour TTL, one use, revocable", "no existing credentials changed"],
+  "required_validation": ["focused calendar and invitation policy tests", "complete existing CI", "real browser owner invitation and replay/revocation checks", "browser weekly tenant isolation and mobile overflow checks", "independent deployment controls through existing Coordinator"],
+  "deployment_bounds": ["use only existing GitHub Coordinator/Actions", "exact successful CI SHA", "backup before additive staging migration", "preserve rollback", "post-deploy authenticated and anonymous boundary checks", "no production merge or commercial launch"],
+  "excluded_effects": ["real Gmail sends", "real customer bookings", "payments", "DNS/TLS wildcard activation", "changes to Project Leader or Codex coordination rules", "new servers or tools", "other project data"],
+  "contains_secrets": false
+}

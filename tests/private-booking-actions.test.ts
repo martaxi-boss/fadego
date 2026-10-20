@@ -7,6 +7,8 @@ import {
   type BookingClock,
 } from "../lib/booking-engine"
 import { hashAccessCode } from "../lib/booking-access"
+import { openBookingEmail } from "../lib/booking-email-crypto"
+import { deliverBookingEmail } from "../lib/booking-email"
 import { updateStaffMember } from "../lib/operational-config"
 import {
   buildPrivateMutationRateLimitKey,
@@ -218,6 +220,9 @@ const tokenForCode = (code: string) =>
 
 after(async () => {
   if (createdShopIds.length > 0) {
+    await db.bookingEmailOutbox.deleteMany({
+      where: { barbershopId: { in: createdShopIds } },
+    })
     await db.bookingAccessToken.deleteMany({
       where: { barbershopId: { in: createdShopIds } },
     })
@@ -1069,4 +1074,98 @@ test("customer actions reject cancellation and reschedule after appointment star
   )
   const token = await tokenForCode(created.accessCode)
   assert.equal(token?.booking.status, "CONFIRMED")
+})
+
+
+test("successive reschedules and cancellation enqueue independent encrypted tenant-scoped emails", async () => {
+  const fixture = await createFixture("email-lifecycle")
+  await addGeneralChair(fixture.shop.id)
+  const initial = await createPublic(fixture)
+  assert.equal(initial.ok, true)
+  if (!initial.ok) return
+
+  const token = await tokenForCode(initial.accessCode)
+  assert.ok(token)
+  const bookingId = token.bookingId
+  const initialCount = await db.bookingEmailOutbox.count({ where: { bookingId } })
+  assert.equal(initialCount, 1)
+
+  assert.deepEqual(await privateReschedule(initial.accessCode, "2030-01-07T10:00:00.000Z"), { ok: true })
+  assert.deepEqual(await privateReschedule(initial.accessCode, "2030-01-07T11:00:00.000Z"), { ok: true })
+  assert.deepEqual(await cancelPrivate(initial.accessCode), { ok: true })
+
+  const jobs = await db.bookingEmailOutbox.findMany({
+    where: { bookingId },
+    orderBy: { createdAt: "asc" },
+  })
+  assert.equal(jobs.length, 4)
+  assert.equal(jobs.filter((j) => j.kind === "CONFIRMATION").length, 1)
+  assert.equal(jobs.filter((j) => j.kind === "RESCHEDULED").length, 2)
+  assert.equal(jobs.filter((j) => j.kind === "CANCELLED").length, 1)
+  for (const job of jobs) {
+    assert.equal(job.barbershopId, fixture.shop.id)
+    assert.equal(job.sealedPayload.includes(initial.accessCode), false)
+  }
+  const reschedules = jobs
+    .filter((job) => job.kind === "RESCHEDULED")
+    .map((job) => openBookingEmail(job.sealedPayload))
+  assert.deepEqual(reschedules.map((p) => p.startsAt).sort(), [
+    "2030-01-07T10:00:00.000Z",
+    "2030-01-07T11:00:00.000Z",
+  ])
+  assert.deepEqual(reschedules.map((p) => p.previousStartsAt).sort(), [
+    "2030-01-07T09:00:00.000Z",
+    "2030-01-07T10:00:00.000Z",
+  ])
+  const cancelled = openBookingEmail(jobs.find((job) => job.kind === "CANCELLED")!.sealedPayload)
+  assert.equal(cancelled.kind, "CANCELLED")
+  assert.equal(cancelled.startsAt, "2030-01-07T11:00:00.000Z")
+
+  const sent: Array<{ subject: string; text: string; to: string }> = []
+  for (const job of jobs.filter((job) => job.kind !== "CONFIRMATION")) {
+    const result = await deliverBookingEmail(job.id, {
+      transport: async (message) => {
+        sent.push(message)
+        return true
+      },
+    })
+    assert.equal(result, "accepted")
+    const stored = await db.bookingEmailOutbox.findUnique({ where: { id: job.id } })
+    assert.equal(stored?.sealedPayload, "")
+    assert.ok(stored?.acceptedAt)
+  }
+  assert.equal(sent.length, 3)
+  assert.equal(sent.filter((mail) => mail.subject.includes("alterada")).length, 2)
+  assert.equal(sent.filter((mail) => mail.subject.includes("cancelada")).length, 1)
+  assert.ok(sent.every((mail) => mail.to === "private@example.test"))
+  assert.ok(sent.every((mail) => mail.text.includes(initial.accessCode)))
+  assert.equal((await db.bookingAccessToken.findUnique({
+    where: { tokenHash: hashAccessCode(initial.accessCode) },
+  }))?.revokedAt, null)
+
+  assert.deepEqual(await cancelPrivate(initial.accessCode), {
+    ok: false,
+    code: "ACTION_UNAVAILABLE",
+  })
+  assert.equal(await db.bookingEmailOutbox.count({ where: { bookingId } }), 4)
+})
+
+test("legacy bookings without an email can still be canceled without notification", async () => {
+  const fixture = await createFixture("legacy-no-email")
+  await addGeneralChair(fixture.shop.id)
+  const initial = await createPublic(fixture)
+  assert.equal(initial.ok, true)
+  if (!initial.ok) return
+  const token = await tokenForCode(initial.accessCode)
+  assert.ok(token)
+
+  await db.booking.update({
+    where: { id: token.bookingId },
+    data: { customerEmailSnapshot: null },
+  })
+  assert.deepEqual(await cancelPrivate(initial.accessCode), { ok: true })
+  const count = await db.bookingEmailOutbox.count({
+    where: { bookingId: token.bookingId, kind: "CANCELLED" },
+  })
+  assert.equal(count, 0)
 })

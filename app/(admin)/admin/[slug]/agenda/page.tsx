@@ -1,12 +1,17 @@
+import { BookingCalendar } from "@/app/_components/booking-calendar"
+import { redirect } from "next/navigation"
 import Link from "next/link"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
+import { canViewCustomerContactDetails } from "@/lib/tenant-presentation"
 import {
   adjacentAgendaDate,
+  agendaDates,
   agendaUtcSearchWindow,
   isValidAgendaDate,
   localAgendaDate,
   resolveAgendaTimezone,
+  resolveAgendaProfessionalFilter,
 } from "@/lib/admin-agenda"
 import {
   cancelTenantBookingAction,
@@ -42,11 +47,15 @@ export default async function AgendaPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ date?: string | string[]; status?: string | string[]; notice?: string | string[] }>
+  searchParams: Promise<{ date?: string | string[]; view?: string | string[]; status?: string | string[]; professional?: string | string[]; notice?: string | string[] }>
 }) {
   const { slug } = await params
   const query = await searchParams
   const access = await requireBarbershopBySlug(slug, ["OWNER", "ADMIN", "STAFF"])
+  // Personal staff access uses a separate, appointment-scoped dashboard.
+  if (access.membership.role === "STAFF") {
+    redirect("/admin/" + access.barbershop.slug + "/barbeiro")
+  }
   const shop = await db.barbershop.findUnique({
     where: { id: access.barbershop.id },
     select: { timezone: true },
@@ -58,14 +67,17 @@ export default async function AgendaPage({
     : localAgendaDate(new Date(), timeZone)
   const requestedStatus = asText(query.status)
   const selectedStatus = requestedStatus in statusLabels ? requestedStatus : "ALL"
-  const window = agendaUtcSearchWindow(date)
-  const [records, staff, generalChairCount] = await Promise.all([
+  const view = query.view === "week" ? "week" : "day"
+  const dates = agendaDates(date, view)
+  const window = agendaUtcSearchWindow(dates[0], dates.length)
+  const [records, staff, professionals, generalChairCount] = await Promise.all([
     db.booking.findMany({
     where: { barbershopId: access.barbershop.id, startsAt: window },
     select: {
       id: true,
       startsAt: true,
       endsAt: true,
+      staffMemberId: true,
       status: true,
       serviceNameSnapshot: true,
       serviceDurationMinutes: true,
@@ -76,7 +88,7 @@ export default async function AgendaPage({
       chairNumberSnapshot: true,
     },
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
-    take: 2500,
+    take: view === "week" ? 10000 : 2500,
     }),
     db.staffMember.findMany({
       where: {
@@ -88,15 +100,31 @@ export default async function AgendaPage({
       select: { id: true, name: true },
       orderBy: [{ name: "asc" }, { id: "asc" }],
     }),
+    db.staffMember.findMany({
+      where: { barbershopId: access.barbershop.id },
+      select: { id: true, name: true, archivedAt: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    }),
     db.chair.count({
       where: { barbershopId: access.barbershop.id, active: true, mode: "GENERAL_BOOKING" },
     }),
   ])
-  const allDay = records.filter((item) => localAgendaDate(item.startsAt, timeZone) === date)
-  const visible = selectedStatus === "ALL"
+  const allDay = records.filter((item) => dates.includes(localAgendaDate(item.startsAt, timeZone)))
+  const selectedProfessional = resolveAgendaProfessionalFilter(
+    query.professional,
+    professionals.map((professional) => professional.id),
+  )
+  const byStatus = selectedStatus === "ALL"
     ? allDay
     : allDay.filter((item) => item.status === selectedStatus)
-  const canManage = access.membership.role !== "STAFF"
+  const visible = byStatus.filter((item) =>
+    selectedProfessional === "ALL" ||
+    (selectedProfessional === "GENERAL"
+      ? item.staffMemberId === null
+      : item.staffMemberId === selectedProfessional),
+  )
+  const canManage = access.membership.role === "OWNER" || access.membership.role === "ADMIN"
+  const canViewContacts = canViewCustomerContactDetails(access.membership.role)
   const hour = new Intl.DateTimeFormat("pt-PT", {
     timeZone,
     hour: "2-digit",
@@ -107,6 +135,12 @@ export default async function AgendaPage({
   const basePath = "/admin/" + access.barbershop.slug + "/agenda"
   const notice = asText(query.notice)
   const now = new Date()
+  const dateHref = (newDate: string, newView = view) => {
+    const params = new URLSearchParams({ date: newDate, view: newView })
+    if (selectedStatus !== "ALL") params.set("status", selectedStatus)
+    if (selectedProfessional !== "ALL") params.set("professional", selectedProfessional)
+    return basePath + "?" + params.toString()
+  }
 
   return (
     <div className="space-y-6">
@@ -115,7 +149,7 @@ export default async function AgendaPage({
         <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Agenda de marcações</h1>
-            <p className="mt-2 text-sm text-slate-300">Consulta de reservas por dia, profissional e estado · {timeZone}</p>
+            <p className="mt-2 text-sm text-slate-300">Consulta de reservas por dia ou semana, profissional e estado · {timeZone}</p>
           </div>
           <Link className="rounded-xl border border-white/20 px-4 py-2 text-sm font-medium hover:bg-white/10"
             href={"/b/" + access.barbershop.slug}>Abrir página de reservas ↗</Link>
@@ -130,7 +164,7 @@ export default async function AgendaPage({
 
       <section className="grid gap-3 sm:grid-cols-3">
         {[
-          { label: "Marcações do dia", value: allDay.length },
+          { label: view === "week" ? "Marcações da semana" : "Marcações do dia", value: allDay.length },
           { label: "Confirmadas", value: allDay.filter((item) => item.status === "CONFIRMED").length },
           { label: "Por reatribuir", value: allDay.filter((item) => item.status === "NEEDS_REASSIGNMENT").length },
         ].map((metric) => (
@@ -143,6 +177,7 @@ export default async function AgendaPage({
 
       <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
         <form action={basePath} className="flex flex-wrap items-end gap-3">
+          <input type="hidden" name="view" value={view} />
           <label className="block text-sm font-medium text-slate-700">
             Data
             <input className="mt-1 block rounded-lg border border-gray-300 px-3 py-2" type="date" name="date"
@@ -157,13 +192,26 @@ export default async function AgendaPage({
               ))}
             </select>
           </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Profissional
+            <select name="professional" defaultValue={selectedProfessional}
+              className="mt-1 block max-w-full rounded-lg border border-gray-300 px-3 py-2">
+              <option value="ALL">Todos os profissionais</option>
+              <option value="GENERAL">Atendimento geral</option>
+              {professionals.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}{person.archivedAt ? " (arquivado)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <button className="rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
             type="submit">Filtrar</button>
           <div className="flex items-center gap-2 sm:ml-auto">
             <Link className="rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50"
-              href={basePath + "?date=" + adjacentAgendaDate(date, -1)}>← Anterior</Link>
+              href={dateHref(adjacentAgendaDate(date, view === "week" ? -7 : -1))}>← Anterior</Link>
             <Link className="rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50"
-              href={basePath + "?date=" + adjacentAgendaDate(date, 1)}>Seguinte →</Link>
+              href={dateHref(adjacentAgendaDate(date, view === "week" ? 7 : 1))}>Seguinte →</Link>
           </div>
         </form>
       </section>
@@ -175,11 +223,24 @@ export default async function AgendaPage({
       {notice === "rate-limit" ? <p role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Demasiadas ações. Tenta mais tarde.</p> : null}
       {notice === "unavailable" || notice === "invalid" ? <p role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">Não foi possível alterar a marcação.</p> : null}
 
+      <nav aria-label="Visualização da agenda" className="flex flex-wrap gap-2">
+        {(["day", "week"] as const).map((mode) => <Link key={mode}
+          href={dateHref(date, mode)} aria-current={view === mode ? "page" : undefined}
+          className={"rounded-xl border px-5 py-3 text-sm font-bold " +
+            (view === mode ? "border-emerald-800 bg-emerald-800 text-white" : "border-gray-200 bg-white text-emerald-900")}>
+          {mode === "day" ? "Dia" : "Semana"}
+        </Link>)}
+        <Link href={dateHref(localAgendaDate(now, timeZone))}
+          className="rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-bold text-emerald-900">Hoje</Link>
+      </nav>
+      <BookingCalendar dates={dates} bookings={visible} timeZone={timeZone}
+        dayHref={(day) => dateHref(day, "day")} />
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">{date} · {visible.length} marcações</h2>
+        <h2 className="text-lg font-semibold text-slate-900">{dates[0]}{view === "week" ? " a " + dates[6] : ""} · {visible.length} marcações</h2>
         {visible.map((booking) => (
-          <article key={booking.id} className="flex flex-wrap items-start gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <article id={"booking-" + booking.id} key={booking.id} tabIndex={-1} className="flex flex-wrap items-start gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="min-w-20 rounded-xl bg-slate-100 px-3 py-2 text-center text-xl font-semibold text-slate-900">
+              {view === "week" ? <span className="block text-xs">{localAgendaDate(booking.startsAt, timeZone)}</span> : null}
               {hour.format(booking.startsAt)}
             </div>
             <div className="min-w-0 flex-1 space-y-2">
@@ -195,7 +256,9 @@ export default async function AgendaPage({
               <p className="text-sm text-gray-500">
                 {booking.staffNameSnapshot ?? "Atendimento geral"} · Cadeira {booking.chairNumberSnapshot}
               </p>
-              <p className="text-sm text-gray-500">Contacto: {booking.customerPhoneSnapshot}</p>
+              {canViewContacts ? (
+                <p className="text-sm text-gray-500">Contacto: {booking.customerPhoneSnapshot}</p>
+              ) : null}
             </div>
             {canManage ? (
               <div className="flex flex-wrap gap-2">
@@ -239,7 +302,7 @@ export default async function AgendaPage({
             <p className="mt-2 text-sm text-gray-500">Escolhe outra data ou altera o filtro.</p>
           </div>
         ) : null}
-        {records.length >= 2500 ? (
+        {records.length >= (view === "week" ? 10000 : 2500) ? (
           <p role="alert" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
             O limite de consulta foi atingido. A listagem pode estar incompleta; reduz o intervalo ou consulta o suporte.
           </p>
@@ -248,3 +311,4 @@ export default async function AgendaPage({
     </div>
   )
 }
+

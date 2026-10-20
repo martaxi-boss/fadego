@@ -1,7 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { AvailabilityRequestVersion } from "@/lib/availability-request-version"
 import {
   buildQrMatrix,
   privateQrPayload,
@@ -39,6 +40,7 @@ export default function PrivateBookingControls({
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [rescheduling, setRescheduling] = useState(false)
   const [rescheduleError, setRescheduleError] = useState<string | null>(null)
+  const availabilityRequests = useRef(new AvailabilityRequestVersion())
 
   useEffect(() => {
     try {
@@ -57,6 +59,7 @@ export default function PrivateBookingControls({
       slots.map((slot) => (
         <button
           aria-pressed={selectedStart === slot.startsAt}
+          disabled={rescheduling || loadingSlots}
           className={
             selectedStart === slot.startsAt
               ? "rounded-lg bg-gray-950 px-3 py-2 text-sm font-medium text-white"
@@ -72,14 +75,15 @@ export default function PrivateBookingControls({
     [selectedStart, slots],
   )
 
-  const loadAvailability = async () => {
+  const loadAvailability = async (staleNotice?: string) => {
+    const version = availabilityRequests.current.begin()
     if (!localDate) {
       setRescheduleError("Escolhe primeiro um dia.")
       return
     }
 
     setLoadingSlots(true)
-    setRescheduleError(null)
+    setRescheduleError(staleNotice ?? null)
     setSelectedStart("")
 
     try {
@@ -101,6 +105,7 @@ export default function PrivateBookingControls({
           }
         | { ok: false; code: string }
 
+      if (!availabilityRequests.current.isCurrent(version)) return
       if (!result.ok) {
         setSlots([])
         setRescheduleError(
@@ -116,13 +121,18 @@ export default function PrivateBookingControls({
       const nextSlots = result.availability.slots
       setSlots(nextSlots)
       if (nextSlots.length === 0) {
-        setRescheduleError("Não existem horários disponíveis nesse dia.")
+        setRescheduleError(
+          staleNotice ?? "Não existem horários disponíveis nesse dia.",
+        )
       }
     } catch {
+      if (!availabilityRequests.current.isCurrent(version)) return
       setSlots([])
       setRescheduleError(genericError)
     } finally {
-      setLoadingSlots(false)
+      if (availabilityRequests.current.isCurrent(version)) {
+        setLoadingSlots(false)
+      }
     }
   }
 
@@ -190,8 +200,7 @@ export default function PrivateBookingControls({
 
       if (!result.ok) {
         if (result.code === "SLOT_UNAVAILABLE") {
-          setRescheduleError(staleError)
-          await loadAvailability()
+          await loadAvailability(staleError)
           return
         }
 
@@ -205,6 +214,7 @@ export default function PrivateBookingControls({
         return
       }
 
+      availabilityRequests.current.invalidate()
       setSlots([])
       setSelectedStart("")
       router.refresh()
@@ -301,6 +311,8 @@ export default function PrivateBookingControls({
               <input
                 className="w-full rounded-lg border border-gray-300 px-3 py-2"
                 onChange={(event) => {
+                  availabilityRequests.current.invalidate()
+                  setLoadingSlots(false)
                   setLocalDate(event.target.value)
                   setSlots([])
                   setSelectedStart("")
@@ -308,12 +320,13 @@ export default function PrivateBookingControls({
                 }}
                 type="date"
                 value={localDate}
+                disabled={rescheduling}
               />
             </label>
             <button
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium disabled:opacity-50"
               disabled={loadingSlots || !localDate}
-              onClick={loadAvailability}
+              onClick={() => void loadAvailability()}
               type="button"
             >
               {loadingSlots ? "A procurar..." : "Ver horários"}
@@ -326,7 +339,7 @@ export default function PrivateBookingControls({
               <div className="mt-2 flex flex-wrap gap-2">{slotButtons}</div>
               <button
                 className="mt-4 rounded-lg bg-gray-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                disabled={!selectedStart || rescheduling}
+                disabled={!selectedStart || rescheduling || loadingSlots}
                 onClick={reschedule}
                 type="button"
               >

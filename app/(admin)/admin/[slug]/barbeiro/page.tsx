@@ -1,9 +1,10 @@
+import { BookingCalendar } from "@/app/_components/booking-calendar"
 import Link from "next/link"
 import { CalendarDays, Clock3, Scissors, UserRound, ArrowLeft, ArrowRight } from "lucide-react"
 import { requireBarbershopBySlug } from "@/lib/authorization"
 import { db } from "@/lib/prisma"
 import {
-  adjacentAgendaDate, agendaUtcSearchWindow, isValidAgendaDate,
+  adjacentAgendaDate, agendaDates, agendaUtcSearchWindow, isValidAgendaDate,
   localAgendaDate, resolveAgendaTimezone,
 } from "@/lib/admin-agenda"
 import { resolveStaffPanelTarget } from "@/lib/staff-panel-policy"
@@ -30,7 +31,7 @@ export default async function BarberPersonalPage({
   params, searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ date?: string | string[]; professional?: string | string[]; notice?: string }>
+  searchParams: Promise<{ date?: string | string[]; view?: string | string[]; professional?: string | string[]; notice?: string }>
 }) {
   const { slug } = await params
   const query = await searchParams
@@ -48,6 +49,8 @@ export default async function BarberPersonalPage({
   const today = localAgendaDate(new Date(), timeZone)
   const requestedDate = dateText(query.date)
   const date = isValidAgendaDate(requestedDate) ? requestedDate : today
+  const view = query.view === "week" ? "week" : "day"
+  const dates = agendaDates(date, view)
 
   // Staff identities are always resolved from the authenticated user, NOT from
   // the URL. Manager previews remain scoped to active profiles of this shop.
@@ -78,8 +81,8 @@ export default async function BarberPersonalPage({
         : Promise.resolve(null),
   ])
 
-  const link = (day: string) => {
-    const query = new URLSearchParams({ date: day })
+  const link = (day: string, mode = view) => {
+    const query = new URLSearchParams({ date: day, view: mode })
     if (manager && professional) query.set("professional", professional.id)
     return "/admin/" + slug + "/barbeiro?" + query.toString()
   }
@@ -133,7 +136,7 @@ export default async function BarberPersonalPage({
     // The DB predicate MUST contain both the tenant and the identified barber.
     where: {
       barbershopId: shopId, staffMemberId: professional.id,
-      startsAt: agendaUtcSearchWindow(date),
+      startsAt: agendaUtcSearchWindow(dates[0], dates.length),
     },
     select: {
       id: true, startsAt: true, endsAt: true, status: true,
@@ -141,15 +144,15 @@ export default async function BarberPersonalPage({
       serviceDurationMinutes: true, chairNumberSnapshot: true,
     },
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
-    take: 500,
+    take: view === "week" ? 3500 : 500,
   })
   const dayBookings = bookings.filter((booking) =>
-    localAgendaDate(booking.startsAt, timeZone) === date,
+    dates.includes(localAgendaDate(booking.startsAt, timeZone)),
   )
   const confirmed = dayBookings.filter((booking) => booking.status === "CONFIRMED")
   const completed = dayBookings.filter((booking) => booking.status === "COMPLETED")
   const nextAppointment = confirmed.find((booking) => booking.startsAt > new Date())
-  const futureDays = [date, adjacentAgendaDate(date, -1), adjacentAgendaDate(date, 1)]
+  const futureDays = [date, adjacentAgendaDate(date, view === "week" ? -7 : -1), adjacentAgendaDate(date, view === "week" ? 7 : 1)]
 
   return (
     <div className="space-y-6">
@@ -209,7 +212,7 @@ export default async function BarberPersonalPage({
 
       <section aria-label="Resumo das marcações" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Marcações do dia", value: dayBookings.length, icon: CalendarDays },
+          { label: view === "week" ? "Marcações da semana" : "Marcações do dia", value: dayBookings.length, icon: CalendarDays },
           { label: "Confirmadas", value: confirmed.length, icon: Clock3 },
           { label: "Concluídas", value: completed.length, icon: Scissors },
           { label: "Próxima marcação", value: nextAppointment
@@ -225,12 +228,22 @@ export default async function BarberPersonalPage({
         ))}
       </section>
 
+      <nav aria-label="Visualização da agenda" className="flex gap-2">
+        {(["day", "week"] as const).map((mode) => <Link key={mode}
+          href={link(date, mode)} aria-current={view === mode ? "page" : undefined}
+          className={"rounded-xl border px-5 py-3 text-sm font-bold " +
+            (view === mode ? "border-emerald-800 bg-emerald-800 text-white" : "border-gray-200 bg-white text-emerald-900")}>
+          {mode === "day" ? "Dia" : "Semana"}
+        </Link>)}
+      </nav>
+      <BookingCalendar dates={dates} bookings={dayBookings} timeZone={timeZone}
+        professionalName={professional.name} dayHref={(day) => link(day, "day")} />
       <section className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-black text-[#1a3c2d]">A minha agenda</h2>
             <p className="mt-1 text-sm text-gray-500">
-              {date} · {timeZone} · Só marcações atribuídas a {professional.name}
+              {dates[0]}{view === "week" ? " a " + dates[6] : ""} · {timeZone} · Só marcações atribuídas a {professional.name}
             </p>
           </div>
           <Link href={link(today)}
@@ -248,11 +261,24 @@ export default async function BarberPersonalPage({
             Seguinte <ArrowRight className="size-4" aria-hidden />
           </Link>
         </div>
+        <form action={"/admin/" + slug + "/barbeiro"} className="mt-4 flex flex-wrap items-end gap-3">
+          <input type="hidden" name="view" value={view} />
+          {manager ? <input type="hidden" name="professional" value={professional.id} /> : null}
+          <label className="text-sm font-semibold text-gray-700">Data
+            <input type="date" name="date" defaultValue={date} required
+              className="ml-2 rounded-lg border border-gray-300 px-3 py-2" />
+          </label>
+          <button type="submit" className="rounded-lg bg-emerald-800 px-4 py-2 text-sm font-bold text-white">Ver agenda</button>
+        </form>
+        {bookings.length >= (view === "week" ? 3500 : 500) ? (
+          <p role="alert" className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">O limite de consulta foi atingido; consulta a vista diária para confirmar todas as marcações.</p>
+        ) : null}
         <div className="mt-6 space-y-3">
           {dayBookings.map((booking) => (
-            <article key={booking.id}
+            <article id={"booking-" + booking.id} tabIndex={-1} key={booking.id}
               className="flex items-start gap-4 rounded-xl border border-[#e0eae2] bg-[#f8faf7] p-4">
               <div className="min-w-16 rounded-xl bg-[#e2f3e6] px-3 py-3 text-center font-black tabular-nums text-[#1e5d39]">
+                {view === "week" ? <span className="block text-xs">{localAgendaDate(booking.startsAt, timeZone)}</span> : null}
                 {rowTime(booking.startsAt, timeZone)}
               </div>
               <div className="min-w-0 flex-1">
@@ -305,7 +331,7 @@ export default async function BarberPersonalPage({
           {dayBookings.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 p-8 text-center">
               <CalendarDays className="mx-auto size-8 text-[#74947b]" aria-hidden />
-              <p className="mt-3 font-semibold text-[#294835]">Sem marcações neste dia</p>
+              <p className="mt-3 font-semibold text-[#294835]">Sem marcações neste período</p>
               <p className="mt-1 text-sm text-gray-500">Consulta outra data na tua agenda.</p>
             </div>
           ) : null}
@@ -319,3 +345,4 @@ export default async function BarberPersonalPage({
     </div>
   )
 }
+

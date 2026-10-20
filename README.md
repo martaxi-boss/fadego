@@ -13,11 +13,11 @@ canonical Next.js application; it is not a native Floot project.
 - Gmail próprio obrigatório por barbearia via Google OAuth; clientes apenas
   fornecem email obrigatório, sem OAuth. Envio real desativado por defeito,
   sem fornecedores alternativos ou caixas de email de subdomínios.
-- Tenant-scoped administrator agenda and searchable customer list.
+- Tenant-scoped day/week calendar, professional filters and searchable customer list.
 - Club plans, enrollments, entitlements and usage recording.
 - Provider-neutral ledger for Club payments and platform SaaS subscriptions.
   **No real processor, checkout, billing webhook or financial effect is wired in.**
-- Read-only super-admin platform metrics.
+- Super-admin tenant account management, guarded owner invitations and platform metrics.\n- Individual barber bookings, weekly hours, breaks, days off and staff invitations.
 
 ## Technical stack
 
@@ -63,3 +63,4 @@ Current repository is **not a completed production rollout**. Read
 DNS, real customer data or production hosting.
 
 Provenance: `THIRD_PARTY_NOTICES.md` and `docs/REUSE_SOURCES.md`.
+

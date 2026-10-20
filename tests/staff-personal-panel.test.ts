@@ -42,7 +42,8 @@ test("personal bookings are constrained to the authenticated staff profile and t
   assert.match(page, /barbershopId: shopId, userId: selection\.userId/)
   assert.match(page, /id: selection\.professionalId, barbershopId: shopId/)
   assert.match(page, /barbershopId: shopId, staffMemberId: professional\.id/)
-  assert.match(page, /localAgendaDate\(booking\.startsAt, timeZone\) === date/)
+  assert.match(page, /dates\.includes\(localAgendaDate\(booking\.startsAt, timeZone\)\)/)
+  assert.match(page, /agendaUtcSearchWindow\(dates\[0\], dates\.length\)/)
   assert.doesNotMatch(page, /customerPhoneSnapshot|customerEmailSnapshot|servicePriceSnapshot/)
   assert.match(page, /Pré-visualização para administração/)
   assert.match(page, /Ainda sem agenda individual disponível/)
@@ -79,3 +80,4 @@ test("staff administrative URLs redirect before reading other customers or booki
   const customers = readFileSync("app/(admin)/admin/[slug]/customers/page.tsx", "utf8")
   assert.match(customers, /requireBarbershopBySlug\(slug, \["OWNER", "ADMIN"\]\)/)
 })
+

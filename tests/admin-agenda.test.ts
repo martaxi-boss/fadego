@@ -2,6 +2,10 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
   adjacentAgendaDate,
+  agendaDates,
+  agendaDisplayInterval,
+  agendaEventLanes,
+  agendaLocalMinute,
   agendaUtcSearchWindow,
   isValidAgendaDate,
   localAgendaDate,
@@ -17,6 +21,45 @@ test("agenda accepts only real ISO calendar dates", () => {
     assert.equal(isValidAgendaDate(candidate), false)
   }
   assert.equal(isValidAgendaDate(null), false)
+})
+
+test("weekly agenda starts on Monday and crosses year/leap-day boundaries", () => {
+  assert.deepEqual(agendaDates("2027-01-03", "week"), [
+    "2026-12-28", "2026-12-29", "2026-12-30", "2026-12-31", "2027-01-01", "2027-01-02", "2027-01-03",
+  ])
+  assert.equal(agendaDates("2028-03-01", "week")[1], "2028-02-29")
+  assert.deepEqual(agendaDates("2026-10-20", ["week"]), ["2026-10-20"])
+  const window = agendaUtcSearchWindow("2026-10-19", 7)
+  assert.equal(window.gte.toISOString(), "2026-10-18T00:00:00.000Z")
+  assert.equal(window.lt.toISOString(), "2026-10-27T00:00:00.000Z")
+  for (const days of [0, 8, 1.5, NaN]) assert.throws(() => agendaUtcSearchWindow("2026-10-19", days))
+})
+
+test("calendar placement uses tenant-local minutes, including midnight", () => {
+  assert.equal(agendaLocalMinute(new Date("2026-10-20T23:00:00Z"), "Europe/Lisbon"), 0)
+  assert.equal(agendaLocalMinute(new Date("2026-10-20T09:15:00Z"), "Europe/Lisbon"), 615)
+  assert.equal(agendaLocalMinute(new Date("2026-10-25T01:30:00Z"), "Europe/Lisbon"), 90)
+})
+
+test("simultaneous appointments have separate lanes; touching appointments reuse lanes", () => {
+  const booking = (id: string, start: string, end: string) => ({ id,
+    startsAt: new Date("2026-10-20T" + start + ":00Z"), endsAt: new Date("2026-10-20T" + end + ":00Z"),
+  })
+  const input = [booking("d", "12:00", "12:30"), booking("b", "09:15", "10:00"),
+    booking("a", "09:00", "09:30"), booking("c", "09:30", "10:30")]
+  const events = agendaEventLanes(input)
+  assert.deepEqual(events.map(({ booking, lane, lanes }) => [booking.id, lane, lanes]), [
+    ["a", 0, 2], ["b", 1, 2], ["c", 0, 2], ["d", 0, 1],
+  ])
+  assert.equal(input[0].id, "d", "display layout must not mutate query results")
+  assert.deepEqual(agendaEventLanes([]), [])
+})
+
+test("repeated Lisbon clock hour keeps a positive calendar appointment height", () => {
+  assert.deepEqual(agendaDisplayInterval({ startsAt: new Date("2026-10-25T00:45:00Z"),
+    endsAt: new Date("2026-10-25T01:15:00Z") }, "Europe/Lisbon"), { from: 105, to: 135 })
+  assert.deepEqual(agendaDisplayInterval({ startsAt: new Date("2026-10-20T22:45:00Z"),
+    endsAt: new Date("2026-10-20T23:00:00Z") }, "Europe/Lisbon"), { from: 1425, to: 1440 })
 })
 
 test("agenda follows tenant timezone across Lisbon daylight-saving transitions", () => {
@@ -45,3 +88,4 @@ test("agenda professional filter accepts only a tenant's listed staff identities
   assert.equal(resolveAgendaProfessionalFilter(["GENERAL"], ownStaff), "ALL")
   assert.equal(resolveAgendaProfessionalFilter(undefined, ownStaff), "ALL")
 })
+

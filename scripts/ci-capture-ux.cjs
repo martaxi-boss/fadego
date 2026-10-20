@@ -58,6 +58,7 @@ async function main() {
     await capture(d, "/admin", "03-barbearias-desktop.jpg", "Escolher barbearia — Computador")
     await capture(d, "/admin/atelier-fadego-demo", "04-painel-desktop.jpg", "Painel da barbearia — Computador")
     await capture(d, "/admin/atelier-fadego-demo/agenda?date=2030-05-20", "05-agenda-desktop.jpg", "Agenda — Computador")
+    await capture(d, "/admin/atelier-fadego-demo/agenda?date=2030-05-20&view=week", "19-agenda-semanal-desktop.jpg", "Agenda semanal — Computador")
     await capture(d, "/admin/atelier-fadego-demo/customers", "06-clientes-desktop.jpg", "Clientes — Computador")
     await capture(d, "/admin/atelier-fadego-demo/club", "07-club-desktop.jpg", "Club — Computador")
     await capture(d, "/admin/atelier-fadego-demo/contact", "17-email-desktop.jpg", "Gmail do negócio — Computador")
@@ -75,6 +76,7 @@ async function main() {
     await authenticate(m)
     await capture(m, "/admin/atelier-fadego-demo", "11-painel-mobile.jpg", "Painel da barbearia — Telemóvel")
     await capture(m, "/admin/atelier-fadego-demo/agenda?date=2030-05-20", "12-agenda-mobile.jpg", "Agenda — Telemóvel")
+    await capture(m, "/admin/atelier-fadego-demo/agenda?date=2030-05-20&view=week", "20-agenda-semanal-mobile.jpg", "Agenda semanal — Telemóvel")
     await capture(m, "/admin/atelier-fadego-demo/contact", "18-email-mobile.jpg", "Gmail do negócio — Telemóvel")
     await desktop.close()
     await mobile.close()
@@ -91,3 +93,4 @@ main().catch((error) => {
   console.error("[ci-capture]", error)
   process.exitCode = 1
 })
+

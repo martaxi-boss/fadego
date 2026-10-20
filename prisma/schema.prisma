@@ -70,6 +70,7 @@ model User {
   passwordHash        String
   platformRole        PlatformRole            @default(USER)
   active              Boolean                 @default(true)
+  onboardingPending   Boolean                 @default(false)
   memberships         BarbershopMember[]
   staffMembers        StaffMember[]
   gmailOAuthAttempts  GmailOAuthAttempt[]
@@ -127,11 +128,28 @@ model BarbershopMember {
 
   barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
   user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ownerInvitations OwnerInvitation[]
 
   @@unique([barbershopId, userId])
   @@unique([id, barbershopId])
   @@index([userId, active])
   @@index([barbershopId, active, role])
+}
+
+model OwnerInvitation {
+  id           String    @id @default(uuid())
+  barbershopId String
+  membershipId String
+  email        String    @db.VarChar(254)
+  tokenHash    String    @unique @db.VarChar(64)
+  expiresAt    DateTime  @db.Timestamptz(3)
+  redeemedAt   DateTime? @db.Timestamptz(3)
+  revokedAt    DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now())
+
+  membership BarbershopMember @relation(fields: [membershipId, barbershopId], references: [id, barbershopId], onDelete: Restrict)
+
+  @@index([barbershopId, membershipId, expiresAt])
 }
 
 model StaffMember {
@@ -562,3 +580,4 @@ model RateLimit {
   points Int     @default(0)
   expire BigInt?
 }
+

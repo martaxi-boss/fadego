@@ -30,7 +30,7 @@ export async function createPlatformShop(input: CreatePlatformShopInput) {
     const owner = previous ?? await tx.user.create({
       data: {
         email: input.ownerEmail, passwordHash: unusablePasswordHash,
-        active: false, platformRole: "USER",
+        active: false, platformRole: "USER", onboardingPending: true,
       },
       select: { id: true },
     })
@@ -156,3 +156,4 @@ export async function setPlatformMemberAccess(
     })
   })
 }
+

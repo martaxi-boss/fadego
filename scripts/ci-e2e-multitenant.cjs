@@ -167,6 +167,46 @@ async function main() {
     await owner.getByRole("button", { name: "Ativar barbearia" }).click()
     await owner.waitForURL((url) => url.searchParams.get("notice") === "not-ready", { timeout: 20000 })
     assert.match(await owner.locator("main").innerText(), /Antes de ativar/)
+    // A real browser accepts a private owner invitation on disposable CI data.
+    await owner.getByRole("button", { name: "Convidar proprietário", exact: true }).click()
+    const inviteField = owner.getByRole("textbox", { name: "Convite privado do proprietário" })
+    await inviteField.waitFor()
+    const firstInvite = await inviteField.inputValue()
+    await owner.getByRole("button", { name: "Revogar convite pendente", exact: true }).click()
+    await owner.getByRole("button", { name: "Revogar convite pendente", exact: true }).waitFor({ state: "detached" })
+    const invitedContext = await browser.newContext()
+    const invited = await invitedContext.newPage()
+    await open(invited, new URL(firstInvite).pathname)
+    assert.match(await invited.locator("main").innerText(), /Convite inválido ou expirado/)
+    await owner.getByRole("button", { name: "Convidar proprietário", exact: true }).click()
+    await inviteField.waitFor()
+    await owner.waitForFunction((previous) => {
+      const field = document.querySelector('textarea[aria-label="Convite privado do proprietário"]')
+      return field && field.value && field.value !== previous
+    }, firstInvite)
+    const ownerInvitation = await inviteField.inputValue()
+    await open(invited, new URL(ownerInvitation).pathname)
+    await assertCoreAccessibility(invited, "New business owner activation")
+    await invited.locator('input[name="password"]').fill(process.env.FADEGO_DEMO_PASSWORD)
+    await invited.locator('input[name="repeat"]').fill(process.env.FADEGO_DEMO_PASSWORD)
+    await invited.getByRole("button", { name: "Ativar o meu acesso ao negócio", exact: true }).click()
+    await invited.waitForURL((url) => url.pathname === "/login" && url.searchParams.get("convite") === "aceite")
+    const invitedDb = new Client({ connectionString: process.env.DATABASE_URL })
+    try {
+      await invitedDb.connect()
+      const { rows } = await invitedDb.query(
+        'SELECT b."status", u."active" AS "userActive", u."onboardingPending", u."platformRole", m."active" AS "memberActive", m."role" FROM "Barbershop" b JOIN "BarbershopMember" m ON m."barbershopId" = b."id" JOIN "User" u ON u."id" = m."userId" WHERE b."id" = $1', [newShopId])
+      assert.deepEqual(rows[0], { status: "SUSPENDED", userActive: true, onboardingPending: false,
+        platformRole: "USER", memberActive: true, role: "OWNER" }, "Invitation activates only this owner's access")
+    } finally { await invitedDb.end() }
+    await open(invited, new URL(ownerInvitation).pathname)
+    assert.match(await invited.locator("main").innerText(), /Convite inválido ou expirado/, "Owner invitation cannot be replayed")
+    await signIn(invited, "pending-owner-ci@example.test")
+    await open(invited, "/super-admin")
+    assert.equal(route(invited), "/admin", "New owner cannot become platform admin")
+    await open(invited, "/admin/" + shopA)
+    assert.equal(route(invited), "/admin", "New owner cannot open another tenant")
+    await invitedContext.close()
     await open(owner, "/admin/" + shopA + "/contact")
     await assertCoreAccessibility(owner, "OWNER contact settings")
     const shopEmail = owner.locator('input[name="contactEmail"]')
@@ -206,6 +246,19 @@ async function main() {
     assert.match(reassigned, /Atendimento geral/, "Owner reassign must use the free general chair")
 
     await open(owner, "/admin/" + shopA + "/agenda?date=2030-05-20")
+    await owner.getByRole("link", { name: "Semana", exact: true }).click()
+    await owner.getByRole("region", { name: "Calendário semanal", exact: true }).waitFor()
+    await assertCoreAccessibility(owner, "OWNER weekly calendar")
+    assert.match(await owner.locator("main").innerText(), /2030-05-20 a 2030-05-26/)
+    assert.ok(!(await owner.locator("main").innerText()).includes(privateCustomer),
+      "Weekly calendar must keep tenant isolation")
+    const calendarBooking = owner.locator('section[aria-label="Calendário semanal"] a[href^="#booking-"]').first()
+    const detailsTarget = await calendarBooking.getAttribute("href")
+    await calendarBooking.click()
+    assert.equal(await owner.locator(detailsTarget).count(), 1,
+      "Calendar appointment must link to its real details and actions")
+    await owner.getByRole("link", { name: "Dia", exact: true }).click()
+    await owner.getByRole("region", { name: "Calendário diário", exact: true }).waitFor()
     await owner.getByRole("button", { name: "Cancelar marcação de João de Exemplo" }).click()
     await owner.waitForURL((url) => url.searchParams.get("notice") === "cancelled", { timeout: 20000 })
     await owner.getByRole("status").filter({ hasText: "Marcação cancelada." }).waitFor()
@@ -273,6 +326,21 @@ async function main() {
     assert.equal(await staff.getByRole("link", { name: "Reagendar", exact: true }).count(), 1,
       "STAFF has scoped rescheduling rather than access to the full agenda")
 
+    await staff.getByRole("link", { name: "Semana", exact: true }).click()
+    await staff.getByRole("region", { name: "Calendário semanal", exact: true }).waitFor()
+    await assertCoreAccessibility(staff, "STAFF weekly calendar")
+    await staff.setViewportSize({ width: 390, height: 844 })
+    assert.equal(await staff.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true,
+      "Mobile calendar scroll must stay inside its own container")
+    const week = await staff.locator("main").innerText()
+    assert.match(week, /Cliente do Barbeiro CI/)
+    assert.ok(!week.includes(privateCustomer) && !week.includes(privatePhone),
+      "STAFF weekly calendar must exclude colleagues and contacts")
+    await open(staff, "/admin/" + shopB + "/barbeiro?date=2030-05-20&view=week&professional=123e4567-e89b-42d3-a456-426614174000")
+    assert.match(await staff.locator("main").innerText(), /Cliente do Barbeiro CI/)
+    assert.ok(!(await staff.locator("main").innerText()).includes(privateCustomer),
+      "Weekly view cannot authorize a client-supplied professional")
+    await staff.setViewportSize({ width: 1280, height: 900 })
     await open(staff, "/admin/" + shopB + "/barbeiro/planeamento?date=2030-05-20")
     await assertCoreAccessibility(staff, "Barber personal scheduling")
     const personalPlanning = await staff.locator("main").innerText()
@@ -324,3 +392,4 @@ main().catch((error) => {
   console.error("[ci-e2e-multitenant]", error)
   process.exitCode = 1
 })
+

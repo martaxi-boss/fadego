@@ -1,3 +1,6 @@
+import OwnerInvitationForm from "../../owner-invitation-form"
+import { revokeOwnerInvitationAction } from "../../owner-invitation-actions"
+import { ownerCanBeInvited } from "@/lib/owner-invitation-policy"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { db } from "@/lib/prisma"
@@ -41,7 +44,9 @@ export default async function PlatformShopDetailsPage({
     include: {
       members: {
         include: {
-          user: { select: { id: true, email: true, name: true, active: true } },
+          ownerInvitations: { where: { redeemedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+            select: { id: true, expiresAt: true }, orderBy: { createdAt: "desc" }, take: 5 },
+          user: { select: { id: true, email: true, name: true, active: true, platformRole: true, onboardingPending: true } },
         },
         orderBy: { createdAt: "asc" },
       },
@@ -180,6 +185,11 @@ export default async function PlatformShopDetailsPage({
                     {member.role} · {member.active ? "Acesso ativo" : "Acesso suspenso"} ·
                     {member.user.active ? " Identidade ativa" : " Identidade pendente"}
                   </p>
+                  {!archived && ownerCanBeInvited(member) ? <OwnerInvitationForm shopId={id} membershipId={member.id} /> : null}
+                  {member.ownerInvitations.map((invitation) => <form key={invitation.id}
+                    action={revokeOwnerInvitationAction.bind(null, id, invitation.id)} className="mt-3">
+                    <button type="submit" className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-800">Revogar convite pendente</button>
+                  </form>)}
                 </div>
                 {!archived && (member.active || canEnable) ? (
                   <form action={toggle}>
@@ -220,3 +230,4 @@ export default async function PlatformShopDetailsPage({
     </div>
   )
 }
+

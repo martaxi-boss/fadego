@@ -126,8 +126,8 @@ model BarbershopMember {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  barbershop Barbershop @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
-  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  barbershop       Barbershop        @relation(fields: [barbershopId], references: [id], onDelete: Restrict)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Restrict)
   ownerInvitations OwnerInvitation[]
 
   @@unique([barbershopId, userId])
@@ -580,4 +580,3 @@ model RateLimit {
   points Int     @default(0)
   expire BigInt?
 }
-

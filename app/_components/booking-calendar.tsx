@@ -87,7 +87,7 @@ export function BookingCalendar({ dates, bookings, timeZone, dayHref, profession
                 })).map(({ booking: event, lane, lanes }) => {
                   const booking = event.source
                   const { from, to } = agendaDisplayInterval(booking, timeZone)
-                  const color = colors[professionalIds.indexOf(booking.staffMemberId ?? "GENERAL") % colors.length]
+                  const color = colors[Array.from(booking.staffMemberId ?? "GENERAL").reduce((total, char) => total + char.charCodeAt(0), 0) % colors.length]
                   const cancelled = booking.status.startsWith("CANCELLED")
                   return <a key={booking.id} href={"#booking-" + booking.id}
                     aria-label={`${time(booking.startsAt)}–${time(booking.endsAt)}, ${booking.customerNameSnapshot}, ${booking.serviceNameSnapshot}, ${professionalName ?? booking.staffNameSnapshot ?? "Atendimento geral"}, ${statusLabel[booking.status] ?? booking.status}`}

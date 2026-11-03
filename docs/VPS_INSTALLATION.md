@@ -17,7 +17,7 @@ O caminho antigo **`/srv/fadego-staging` continua apenas como link de compatibil
 
 ## Integracao do Ubuntu e independencia
 
-- Unidade `fadego-staging.service`: ainda utiliza o caminho antigo `/srv/fadego-staging/current`; precisa de ser atualizada e testada antes de retirar o link.
+- Unidade `fadego-staging.service`: configurada para `/srv/projects/fadego/current`, validada com `systemd-analyze verify` e `daemon-reload`. O servico manteve PID 1144 sem reinicio. Falta certificacao de um arranque controlado antes de retirar a ligacao antiga.
 - Configuracao do Nginx, nome de dominio e eventuais ficheiros em `/var/www/fadego-preview`: confirmar a propriedade de cada caminho antes de os migrar.
 - Bases de dados e ficheiros de configuracao privados **nao sao publicados no GitHub**.
 - Node.js do sistema e Nginx sao infraestruturas Ubuntu neste estado; dependencias exclusivas FADEGO devem estar confinadas em `/srv/projects/fadego`.
@@ -28,3 +28,7 @@ O caminho antigo **`/srv/fadego-staging` continua apenas como link de compatibil
 Nao remover releases antigas antes de confirmar quais sao usadas por `current`, de confirmar a politica de recuperacao e de testar o arranque atual. Para uma desinstalacao independente, exportar/guardar dados conforme decisao do proprietario, parar apenas `fadego-staging.service`, remover unidades, proxy e referencias exclusivas deste projeto e depois a sua pasta, sem perturbar os outros projetos.
 
 **Ainda nao certificado para desinstalar simplesmente apagando o diretorio.** O nome fisico ja corresponde ao nome do repositorio.
+
+## Servico systemd no caminho canonico
+
+A configuracao existente da unidade `fadego-staging.service` passou a apontar para `/srv/projects/fadego/current`, sem ficheiros adicionais de override. `systemd-analyze verify` e `systemctl daemon-reload` passaram; PID 1144 manteve-se. [Prova #41716531862](https://github.com/martaxi-boss/VPS/actions/runs/41716531862).

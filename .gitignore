@@ -9,3 +9,15 @@ dist
 .DS_Store
 *.log
 .prisma
+
+# Runtime exclusivo da VPS: nunca versionar artefactos, releases ou dados privados
+/www/
+/releases/
+/current
+/.cache/
+/.local/
+/.config/
+/.pnpm-store/
+/private/
+/data/
+/archive/

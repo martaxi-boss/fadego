@@ -1,5 +1,7 @@
-# Enable only after Supervisor approval. Requires existing Node 22 and
-# /etc/fadego-staging/app.env from the approved VPS secret vault.
+# Deploy only after the three private EnvironmentFile paths have been
+# migrated from /etc and /root to /srv/projects/fadego/private/systemd-env/.
+# Root reads these files before dropping privileges to fadego-staging.
+# Do not place secret values or application sessions in GitHub.
 [Unit]
 Description=FADEGO isolated staging Next.js server
 Wants=network-online.target
@@ -9,14 +11,13 @@ After=network-online.target postgresql.service
 Type=simple
 User=fadego-staging
 Group=fadego-staging
-WorkingDirectory=/srv/fadego-staging/current
+WorkingDirectory=/srv/projects/fadego/current
 Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1
-EnvironmentFile=/etc/fadego-staging/app.env
-# Read by systemd PID 1 before dropping to fadego-staging; never copied into GitHub.
-# Last env file wins: pilot Gmail remains disabled by its root-only vault gates.
-EnvironmentFile=-/root/project-secrets/fadego-gmail/oauth.env
-ExecStart=/usr/bin/node /srv/fadego-staging/current/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3100
+EnvironmentFile=/srv/projects/fadego/private/systemd-env/app.env
+EnvironmentFile=-/srv/projects/fadego/private/systemd-env/oauth.env
+EnvironmentFile=/srv/projects/fadego/private/systemd-env/send-closed.env
+ExecStart=/usr/bin/node /srv/projects/fadego/current/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3100
 Restart=on-failure
 RestartSec=6
 UMask=0027
@@ -24,7 +25,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=/srv/fadego-staging/current/.next/cache
+ReadWritePaths=/srv/projects/fadego/current/.next/cache
 
 [Install]
 WantedBy=multi-user.target

@@ -1401,3 +1401,30 @@ test("005B membership domain remains independent from billing providers renewal 
   assert.equal(domain.includes("Booking"), false)
   assert.equal(booking.includes("MembershipUsage"), false)
 })
+
+test("Club membership pagination remains tenant scoped and preserves stable ordering", async () => {
+  const first = await createShop("page-first")
+  const second = await createShop("page-second")
+  const firstPlan = await createPlan(first.id)
+  const secondPlan = await createPlan(second.id)
+  const firstCustomers = await Promise.all([
+    createCustomer(first.id, "page-one"),
+    createCustomer(first.id, "page-two"),
+  ])
+  const otherCustomer = await createCustomer(second.id, "page-other")
+
+  for (const customer of firstCustomers) {
+    await enrollExistingCustomerMembership(first.id, customer.id, firstPlan.id, fixedClock)
+  }
+  await enrollExistingCustomerMembership(second.id, otherCustomer.id, secondPlan.id, fixedClock)
+
+  const full = await getMemberships(first.id)
+  const pageOne = await getMemberships(first.id, { skip: 0, take: 1 })
+  const pageTwo = await getMemberships(first.id, { skip: 1, take: 1 })
+  assert.equal(full.length, 2)
+  assert.deepEqual(
+    [pageOne[0]?.id, pageTwo[0]?.id],
+    full.map((membership) => membership.id),
+  )
+  assert.equal((await getMemberships(first.id, { skip: 2, take: 1 })).length, 0)
+})

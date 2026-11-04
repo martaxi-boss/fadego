@@ -22,6 +22,7 @@ export default async function SuperAdminLayout({
     <AdminShell
       heading="FADEGO Super Admin"
       homeHref="/super-admin"
+      navigation={[{ href: "/super-admin", label: "Visão geral" }, { href: "/super-admin/barbearias", label: "Barbearias" }]}
       scopeLabel="Plataforma"
     >
       {children}

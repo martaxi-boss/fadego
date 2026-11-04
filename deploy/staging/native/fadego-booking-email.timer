@@ -1,0 +1,13 @@
+# Activating this timer sends real customer emails. Supervisor gate applies.
+[Unit]
+Description=FADEGO retry booking emails every five minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=5min
+AccuracySec=30s
+Unit=fadego-booking-email.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,84 @@
+name: fadego-staging
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fadego_staging
+      POSTGRES_USER: fadego_staging
+      POSTGRES_PASSWORD: ${FADEGO_STAGING_DB_PASSWORD:?Set a staging-only password in the approved VPS vault}
+    volumes:
+      - fadego_staging_db:/var/lib/postgresql/data
+    networks: [fadego_internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fadego_staging -d fadego_staging"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/staging/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://fadego_staging:${FADEGO_STAGING_DB_PASSWORD:?}@db:5432/fadego_staging?schema=public"
+      NEXTAUTH_URL: "https://fadego.duckdns.org"
+      NEXTAUTH_SECRET: ${FADEGO_STAGING_NEXTAUTH_SECRET:?Set a distinct staging secret in the VPS vault}
+      FADEGO_TRUST_PROXY_HOPS: "0"
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:3100:3000"
+    networks: [fadego_internal]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
+
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: ../..
+      dockerfile: deploy/staging/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: "postgresql://fadego_staging:${FADEGO_STAGING_DB_PASSWORD:?}@db:5432/fadego_staging?schema=public"
+    networks: [fadego_internal]
+    restart: "no"
+
+  gateway:
+    profiles: ["dedicated-host"]
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      FADEGO_STAGING_GATE_USER: ${FADEGO_STAGING_GATE_USER:?}
+      FADEGO_STAGING_GATE_HASH: ${FADEGO_STAGING_GATE_HASH:?}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - fadego_staging_caddy_data:/data
+      - fadego_staging_caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [fadego_internal]
+
+volumes:
+  fadego_staging_db:
+  fadego_staging_caddy_data:
+  fadego_staging_caddy_config:
+
+networks:
+  fadego_internal:
+    internal: false

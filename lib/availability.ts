@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client"
 import { db } from "@/lib/prisma"
+import { loadStaffSchedule, staffScheduleAllows } from "@/lib/staff-schedule"
 
 export type AvailabilityErrorCode =
   | "TENANT_UNAVAILABLE"
@@ -336,6 +337,9 @@ const generateSlots = async (
     },
   })
 
+  const staffSchedule = requestedStaffMemberId
+    ? await loadStaffSchedule(tx, input.barbershopId, requestedStaffMemberId, input.localDate)
+    : null
   const seenLocalTimes = new Set<string>()
   const slots: AvailabilitySlot[] = []
 
@@ -345,6 +349,11 @@ const generateSlots = async (
     }
 
     if (mode === "STAFF_BOOKING" && requestedStaffMemberId) {
+      const endLocal = localProjection(candidate.endsAt, timezone)
+      if (!staffSchedule ||
+          !staffScheduleAllows(staffSchedule, candidate.minute, endLocal.minute)) {
+        continue
+      }
       const professionalBlocked = bookings.some(
         (booking) =>
           booking.staffMemberId === requestedStaffMemberId &&

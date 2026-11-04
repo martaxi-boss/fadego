@@ -28,14 +28,9 @@ import {
   type RateLimitName,
 } from "@/lib/rate-limit"
 import { barbershopSlugSchema } from "@/lib/validation"
+import { sealBookingEmail } from "@/lib/booking-email-crypto"
 
-const publicEmailSchema = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim().length === 0
-      ? undefined
-      : value,
-  z.string().trim().toLowerCase().email().max(254).optional(),
-)
+const publicEmailSchema = z.string().trim().toLowerCase().email().max(254)
 
 export const publicCustomerSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -87,6 +82,7 @@ export type PublicBookingResult =
       ok: true
       accessCode: string
       accessPath: string
+      emailNotificationId: string
     }
   | {
       ok: false
@@ -138,6 +134,7 @@ export type PrivateBookingProjection = {
   customerName: string
   canCancel: boolean
   canReschedule: boolean
+  emailDeliveryStatus: "ACCEPTED" | "PENDING" | "NOT_APPLICABLE"
   status:
     | "CONFIRMED"
     | "COMPLETED"
@@ -367,7 +364,7 @@ const createCustomer = (
       barbershopId,
       name: customer.name,
       phone: customer.phone,
-      email: customer.email ?? null,
+      email: customer.email,
     },
   })
 
@@ -425,11 +422,15 @@ export const createPublicBooking = async (
     return await runBookingMutation(async (tx) => {
       const authoritativeTenant = await tx.barbershop.findUnique({
         where: { slug: parsed.data.barbershopSlug },
-        select: { id: true, status: true },
+        select: { id: true, status: true, name: true, slug: true, timezone: true, contactEmail: true, senderAlias: true },
       })
 
       if (!authoritativeTenant || authoritativeTenant.status !== "ACTIVE") {
         throw new BookingEngineError("TENANT_UNAVAILABLE")
+      }
+
+      if (!authoritativeTenant.timezone) {
+        throw new BookingEngineError("TIMEZONE_UNAVAILABLE")
       }
 
       const customer = await createCustomer(
@@ -456,10 +457,33 @@ export const createPublicBooking = async (
         generator: options.accessCodeGenerator,
       })
 
+      // The encrypted notification joins the SAME atomic transaction:
+      // a booking can never succeed without a recoverable email job.
+      const sealedPayload = sealBookingEmail({
+        email: parsed.data.customer.email,
+        customerName: customer.name,
+        barbershopName: authoritativeTenant.name,
+        barbershopSlug: authoritativeTenant.slug,
+        senderAlias: authoritativeTenant.senderAlias ?? undefined,
+        barbershopContactEmail: authoritativeTenant.contactEmail ?? undefined,
+        serviceName: booking.serviceNameSnapshot,
+        startsAt: booking.startsAt.toISOString(),
+        timezone: authoritativeTenant.timezone,
+        accessCode,
+      })
+      const notification = await tx.bookingEmailOutbox.create({
+        data: {
+          barbershopId: authoritativeTenant.id,
+          bookingId: booking.id,
+          sealedPayload,
+        },
+      })
+
       return {
         ok: true as const,
         accessCode,
         accessPath: bookingAccessPath(accessCode),
+        emailNotificationId: notification.id,
       }
     })
   } catch (error) {
@@ -545,6 +569,12 @@ export const lookupPrivateBooking = async (
           serviceDurationMinutes: true,
           customerNameSnapshot: true,
           staffNameSnapshot: true,
+          bookingEmailOutbox: {
+            where: { kind: "CONFIRMATION" },
+            take: 1,
+            orderBy: { createdAt: "asc" },
+            select: { acceptedAt: true },
+          },
         },
       },
     },
@@ -578,6 +608,9 @@ export const lookupPrivateBooking = async (
       durationMinutes: access.booking.serviceDurationMinutes,
       professionalName: access.booking.staffNameSnapshot,
       customerName: access.booking.customerNameSnapshot,
+      emailDeliveryStatus: access.booking.bookingEmailOutbox[0]
+        ? access.booking.bookingEmailOutbox[0].acceptedAt ? "ACCEPTED" : "PENDING"
+        : "NOT_APPLICABLE",
       canCancel:
         access.booking.startsAt > now &&
         (access.booking.status === "CONFIRMED" ||

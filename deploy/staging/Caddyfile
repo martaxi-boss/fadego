@@ -1,0 +1,16 @@
+# Enable this gateway ONLY on a dedicated test host without another proxy.
+# On a shared VPS, keep this gateway stopped and add equivalent protection to
+# the pre-existing HTTPS reverse proxy pointed at 127.0.0.1:3100.
+fadego.duckdns.org {
+    encode zstd gzip
+    header {
+        X-Robots-Tag "noindex, nofollow, noarchive"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        Strict-Transport-Security "max-age=86400"
+    }
+    basic_auth {
+        {$FADEGO_STAGING_GATE_USER} {$FADEGO_STAGING_GATE_HASH}
+    }
+    reverse_proxy app:3000
+}

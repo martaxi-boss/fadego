@@ -14,8 +14,11 @@ import {
   BookingEngineError,
   cancelBookingByCustomer,
   rescheduleBooking,
+  type BookingMutationHook,
 } from "@/lib/booking-engine"
 import { db } from "@/lib/prisma"
+import { sealBookingEmail } from "@/lib/booking-email-crypto"
+import { deliverBookingEmail } from "@/lib/booking-email"
 import {
   consumeRateLimit,
   hashRateLimitKey,
@@ -93,6 +96,14 @@ type PrivateAccess = {
   staffMemberId: string | null
   serviceDurationMinutes: number
   startsAt: Date
+  customerEmail: string | null
+  customerName: string
+  serviceName: string
+  barbershopName: string
+  barbershopSlug: string
+  senderAlias: string | null
+  barbershopContactEmail: string | null
+  timezone: string
 }
 
 const resolvePrivateAccess = async (
@@ -108,8 +119,12 @@ const resolvePrivateAccess = async (
       revokedAt: true,
       barbershopId: true,
       bookingId: true,
+      barbershop: { select: { name: true, slug: true, senderAlias: true, timezone: true, contactEmail: true } },
       booking: {
         select: {
+          customerEmailSnapshot: true,
+          customerNameSnapshot: true,
+          serviceNameSnapshot: true,
           endsAt: true,
           startsAt: true,
           status: true,
@@ -121,7 +136,10 @@ const resolvePrivateAccess = async (
     },
   })
 
-  if (!token || token.revokedAt || isBookingAccessExpired(token.booking.endsAt, now)) {
+  if (
+    !token || token.revokedAt || !token.barbershop.timezone ||
+    isBookingAccessExpired(token.booking.endsAt, now)
+  ) {
     return null
   }
 
@@ -133,6 +151,62 @@ const resolvePrivateAccess = async (
     staffMemberId: token.booking.staffMemberId,
     serviceDurationMinutes: token.booking.serviceDurationMinutes,
     startsAt: token.booking.startsAt,
+    customerEmail: token.booking.customerEmailSnapshot,
+    customerName: token.booking.customerNameSnapshot,
+    serviceName: token.booking.serviceNameSnapshot,
+    barbershopName: token.barbershop.name,
+    barbershopSlug: token.barbershop.slug,
+    senderAlias: token.barbershop.senderAlias,
+    barbershopContactEmail: token.barbershop.contactEmail,
+    timezone: token.barbershop.timezone,
+  }
+}
+
+// Snapshot a transactionally committed event, never send email inside the
+// tenant lock. Legacy appointments without an email stay manageable.
+const bookingActionEmail = (
+  access: PrivateAccess,
+  accessCode: string,
+  kind: "CANCELLED" | "RESCHEDULED",
+  recordJobId: (id: string) => void,
+): BookingMutationHook => async (tx, updated, previousStartsAt) => {
+  if (!access.customerEmail || !z.email().safeParse(access.customerEmail).success) {
+    return
+  }
+
+  const sealedPayload = sealBookingEmail({
+    kind,
+    email: access.customerEmail.toLowerCase(),
+    customerName: access.customerName.slice(0, 120),
+    barbershopName: access.barbershopName.slice(0, 200),
+    barbershopSlug: access.barbershopSlug,
+    senderAlias: access.senderAlias ?? undefined,
+    barbershopContactEmail: access.barbershopContactEmail ?? undefined,
+    serviceName: access.serviceName.slice(0, 200),
+    startsAt: updated.startsAt.toISOString(),
+    timezone: access.timezone,
+    previousStartsAt: kind === "RESCHEDULED"
+      ? previousStartsAt.toISOString()
+      : undefined,
+    accessCode,
+  })
+  const job = await tx.bookingEmailOutbox.create({
+    data: {
+      barbershopId: access.barbershopId,
+      bookingId: access.bookingId,
+      kind,
+      sealedPayload,
+    },
+  })
+  recordJobId(job.id)
+}
+
+const trySendActionEmail = async (jobId: string | null) => {
+  if (!jobId) return
+  try {
+    await deliverBookingEmail(jobId)
+  } catch {
+    // The committed outbox record is retried by the scheduled worker.
   }
 }
 
@@ -184,9 +258,19 @@ export const cancelPrivateBooking = async (
   }
 
   try {
-    await cancelBookingByCustomer(access.barbershopId, access.bookingId, {
-      now: options.now ?? (() => new Date()),
-    })
+    let notificationId: string | null = null
+    await cancelBookingByCustomer(
+      access.barbershopId,
+      access.bookingId,
+      { now: options.now ?? (() => new Date()) },
+      bookingActionEmail(
+        access,
+        canonicalizeAccessCode(rawCode)!,
+        "CANCELLED",
+        (id) => { notificationId = id },
+      ),
+    )
+    await trySendActionEmail(notificationId)
     return { ok: true }
   } catch (error) {
     if (
@@ -291,12 +375,20 @@ export const reschedulePrivateBooking = async (
   }
 
   try {
+    let notificationId: string | null = null
     await rescheduleBooking(
       access.barbershopId,
       access.bookingId,
       parsed.data.startsAt,
       { now: options.now ?? (() => new Date()) },
+      bookingActionEmail(
+        access,
+        canonicalizeAccessCode(rawCode)!,
+        "RESCHEDULED",
+        (id) => { notificationId = id },
+      ),
     )
+    await trySendActionEmail(notificationId)
     return { ok: true }
   } catch (error) {
     if (error instanceof BookingEngineError) {

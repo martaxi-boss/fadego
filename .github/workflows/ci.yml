@@ -85,3 +85,79 @@ jobs:
 
       - name: Secret scan
         run: pnpm secret:scan
+
+      - name: Gmail vault readiness checker (synthetic offline contract)
+        run: python3 scripts/check-gmail-vault.py --self-test
+
+      - name: Production HTTP smoke
+        run: |
+          set -euo pipefail
+          pnpm start > /tmp/fadego-start.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --output /dev/null http://127.0.0.1:3000/; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            tail -n 100 /tmp/fadego-start.log
+            exit 1
+          fi
+          node scripts/smoke-runtime.mjs
+
+      - name: Backup/restore rehearsal (ephemeral CI Postgres only)
+        env:
+          CI_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: bash scripts/ci-backup-restore.sh
+
+      - name: Capture CI-only visual demos
+        if: github.event_name == 'pull_request' && github.head_ref == 'integration/20261016-fadego-candidate'
+        run: |
+          set -euo pipefail
+          export FADEGO_DEMO_EMAIL="ci-demo@fadego.example"
+          export FADEGO_DEMO_PASSWORD="$(openssl rand -hex 24)"
+          pnpm exec tsx scripts/ci-demo-seed.ts
+          npm install --prefix /tmp/fadego-playwright --no-save --no-package-lock --silent playwright@1.56.1
+          pnpm start > /tmp/fadego-showroom.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --output /dev/null http://127.0.0.1:3000/; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            tail -n 70 /tmp/fadego-showroom.log
+            exit 1
+          fi
+          node scripts/ci-capture-ux.cjs
+          node scripts/ci-e2e-multitenant.cjs
+          node scripts/check-staging-host.mjs
+
+      - name: Upload visual demo gallery
+        if: github.event_name == 'pull_request' && github.head_ref == 'integration/20261016-fadego-candidate'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fadego-visual-demo
+          path: demo-shots/
+          retention-days: 14
+
+      - name: Validate staging container and gateway config
+        if: github.event_name == 'pull_request' && github.head_ref == 'integration/20261016-fadego-candidate'
+        env:
+          FADEGO_STAGING_DB_PASSWORD: ci_fake_hex_password_0000000000000000
+          FADEGO_STAGING_NEXTAUTH_SECRET: ci_staging_placeholder_secret_never_deploy
+          FADEGO_STAGING_GATE_USER: ci-pilot
+          FADEGO_STAGING_GATE_HASH: ci_fake_bcrypt_hash_for_config_only
+        run: |
+          set -euo pipefail
+          bash -n deploy/staging/native/build-release.sh
+          docker compose -f deploy/staging/compose.yml --profile dedicated-host config --quiet
+          docker build -f deploy/staging/Dockerfile -t fadego-staging:ci .

@@ -17,21 +17,25 @@ export default function LoginForm() {
     setPending(true)
 
     const form = new FormData(event.currentTarget)
-    const result = await signIn("credentials", {
-      email: String(form.get("email") ?? ""),
-      password: String(form.get("password") ?? ""),
-      redirect: false,
-    })
+    try {
+      const result = await signIn("credentials", {
+        email: String(form.get("email") ?? ""),
+        password: String(form.get("password") ?? ""),
+        redirect: false,
+      })
 
-    setPending(false)
+      if (!result?.ok) {
+        setError(GENERIC_ERROR)
+        return
+      }
 
-    if (!result?.ok) {
-      setError(GENERIC_ERROR)
-      return
+      router.replace("/admin")
+      router.refresh()
+    } catch {
+      setError("Não foi possível entrar. Verifica a ligação e tenta novamente.")
+    } finally {
+      setPending(false)
     }
-
-    router.replace("/admin")
-    router.refresh()
   }
 
   return (
@@ -43,6 +47,8 @@ export default function LoginForm() {
           name="email"
           type="email"
           autoComplete="email"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "login-error" : undefined}
           required
         />
       </label>
@@ -53,11 +59,13 @@ export default function LoginForm() {
           name="password"
           type="password"
           autoComplete="current-password"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "login-error" : undefined}
           required
         />
       </label>
       {error ? (
-        <p className="text-sm text-red-700" role="alert">
+        <p id="login-error" className="text-sm text-red-700" role="alert">
           {error}
         </p>
       ) : null}

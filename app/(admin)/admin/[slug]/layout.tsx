@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import AdminShell from "@/app/_components/admin-shell"
 import { AuthorizationError } from "@/lib/access-policy"
 import { requireBarbershopBySlug } from "@/lib/authorization"
+import { tenantModulesForRole } from "@/lib/admin-navigation"
 
 export default async function TenantAdminLayout({
   children,
@@ -24,25 +25,24 @@ export default async function TenantAdminLayout({
   }
 
   const { barbershop, membership } = access
-  const homeHref = `/admin/${barbershop.slug}`
+  const homeHref = membership.role === "STAFF"
+    ? `/admin/${barbershop.slug}/barbeiro`
+    : `/admin/${barbershop.slug}`
 
   return (
     <AdminShell
       heading={barbershop.name}
       homeHref={homeHref}
       navigation={[
-        { href: homeHref, label: "Visão geral" },
-        { href: `${homeHref}/agenda`, label: "Agenda" },
-        ...(membership.role === "STAFF"
-          ? []
-          : [{ href: `${homeHref}/customers`, label: "Clientes" }]),
-        { href: `${homeHref}/professionals`, label: "Profissionais" },
-        { href: `${homeHref}/chairs`, label: "Cadeiras" },
-        { href: `${homeHref}/services`, label: "Serviços" },
-        { href: `${homeHref}/hours`, label: "Horários" },
-        { href: `${homeHref}/club`, label: "Club" },
+        { href: homeHref, label: membership.role === "STAFF" ? "O meu painel" : "Visão geral" },
+        ...tenantModulesForRole(membership.role)
+          .filter((module) => membership.role !== "STAFF" || module.href !== "barbeiro")
+          .map((module) => ({
+          href: `${homeHref}/${module.href}`,
+          label: module.label,
+        })),
       ]}
-      scopeLabel={`${barbershop.slug}.fadego.pt · ${membership.role}`}
+      scopeLabel={`${barbershop.slug} · ${membership.role}`}
     >
       {children}
     </AdminShell>

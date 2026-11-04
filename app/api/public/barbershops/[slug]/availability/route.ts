@@ -1,5 +1,6 @@
 import { getPublicAvailability } from "@/lib/public-booking"
 import { sourceIpFromHeaders } from "@/lib/request-context"
+import { readBoundedJsonObject } from "@/lib/http-json"
 import { consumeRateLimit, hashRateLimitKey } from "@/lib/rate-limit"
 
 const noStoreHeaders = {
@@ -22,7 +23,14 @@ export async function POST(
       headers: noStoreHeaders,
     })
   }
-  const body = await request.json().catch(() => ({}))
+  const parsedBody = await readBoundedJsonObject(request)
+  if (!parsedBody.ok) {
+    return Response.json({ ok: false, code: "INVALID_INPUT" }, {
+      status: parsedBody.status,
+      headers: noStoreHeaders,
+    })
+  }
+  const body = parsedBody.value
   const result = await getPublicAvailability({
     barbershopSlug: slug,
     serviceId:

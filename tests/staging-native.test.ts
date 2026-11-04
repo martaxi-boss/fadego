@@ -19,7 +19,7 @@ test("developer sample is Gmail-only and keeps all real sends disabled", () => {
 test("native staging runs unprivileged and on localhost only", () => {
   assert.match(service, /User=fadego-staging/)
   assert.match(service, /Group=fadego-staging/)
-  assert.match(service, /EnvironmentFile=\/etc\/fadego-staging\/app\.env/)
+  assert.match(service, /EnvironmentFile=\/srv\/projects\/fadego\/private\/systemd-env\/app\.env/)
   assert.match(service, /--hostname 127\.0\.0\.1 --port 3100/)
   assert.match(service, /NoNewPrivileges=yes/)
   assert.match(service, /ProtectSystem=strict/)
@@ -95,7 +95,7 @@ test("native deployment requires prior approval and must not install Docker", ()
 
 test("systemd loads the root-only existing Gmail vault after staging configuration", () => {
   const mailService = readFileSync("deploy/staging/native/fadego-booking-email.service", "utf8")
-  const regularFile = "EnvironmentFile=/etc/fadego-staging/app.env"
+  const regularFile = "EnvironmentFile=/srv/projects/fadego/private/systemd-env/app.env"
   const protectedGmailVault = "EnvironmentFile=-/root/project-secrets/fadego-gmail/oauth.env"
   for (const unit of [service, mailService]) {
     assert.ok(unit.includes(regularFile), "Retain staging-specific application credentials")
@@ -112,7 +112,7 @@ test("mail retries have their own restricted staging systemd unit", () => {
   const service = readFileSync("deploy/staging/native/fadego-booking-email.service", "utf8")
   const timer = readFileSync("deploy/staging/native/fadego-booking-email.timer", "utf8")
   assert.match(service, /User=fadego-staging/)
-  assert.match(service, /EnvironmentFile=\/etc\/fadego-staging\/app.env/)
+  assert.match(service, /EnvironmentFile=\/srv\/projects\/fadego\/private\/systemd-env\/app\.env/)
   assert.match(service, /scripts\/process-booking-emails.ts/)
   assert.match(timer, /OnUnitInactiveSec=5min/)
   assert.match(timer, /Unit=fadego-booking-email.service/)

@@ -18,7 +18,7 @@ O caminho antigo **`/srv/fadego-staging` continua apenas como link de compatibil
 ## Integracao do Ubuntu e independencia
 
 - Unidade `fadego-staging.service`: configurada para `/srv/projects/fadego/current`, validada com `systemd-analyze verify` e `daemon-reload`. O servico manteve PID 1144 sem reinicio. Falta certificacao de um arranque controlado antes de retirar a ligacao antiga.
-- Configuracao do Nginx, nome de dominio e eventuais ficheiros em `/var/www/fadego-preview`: confirmar a propriedade de cada caminho antes de os migrar.
+- Configuracao do Nginx: a pasta publica foi movida fisicamente para `/srv/projects/fadego/www/preview`; `/var/www/fadego-preview` e apenas um alias de compatibilidade, ainda pendente de eliminacao apos testes.
 - Bases de dados e ficheiros de configuracao privados **nao sao publicados no GitHub**.
 - Node.js do sistema e Nginx sao infraestruturas Ubuntu neste estado; dependencias exclusivas FADEGO devem estar confinadas em `/srv/projects/fadego`.
 - O repositorio e o processo instalados nao foram atualizados automaticamente para o ultimo `main`.
@@ -32,3 +32,11 @@ Nao remover releases antigas antes de confirmar quais sao usadas por `current`, 
 ## Servico systemd no caminho canonico
 
 A configuracao existente da unidade `fadego-staging.service` passou a apontar para `/srv/projects/fadego/current`, sem ficheiros adicionais de override. `systemd-analyze verify` e `systemctl daemon-reload` passaram; PID 1144 manteve-se. [Prova #41716531862](https://github.com/martaxi-boss/VPS/actions/runs/41716531862).
+
+## Consolidacao fisica da pasta publica — 04-11-2026
+
+A auditoria [#41752114680](https://github.com/martaxi-boss/VPS/actions/runs/41752114680) confirmou que o Nginx precisava apenas de traversal para `www-data` na raiz privada `0750` do FADEGO. Foi aplicada uma ACL restrita (`www-data`: apenas atravessar a pasta), sem tornar a raiz publicamente listavel.
+
+A execucao [#41752269362](https://github.com/martaxi-boss/VPS/actions/runs/41752269362) moveu fisicamente a pasta publica `/var/www/fadego-preview` para `/srv/projects/fadego/www/preview` e deixou o caminho antigo como symlink temporario. Confirmou inode, propriedade e permissoes preservados, leitura do `index.html` pelo `www-data`, `nginx -t` positivo e estados dos restantes servicos iguais.
+
+**Ainda por certificar:** atualizar referencias externas do proxy Nginx e automatismos para a pasta canonica; testar HTTP/HTTPS e reinicio controlado; retirar alias; inventariar todas as bases de dados e configuracoes privadas; implementar desinstalacao isolada. Nao remover releases antes de confirmar a versao ativa e um fallback restauravel.

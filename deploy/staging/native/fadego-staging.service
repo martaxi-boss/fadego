@@ -1,5 +1,7 @@
-# Deploy only after the three private EnvironmentFile paths have been
-# migrated from /etc and /root to /srv/projects/fadego/private/systemd-env/.
+# Deploy only after the two FADEGO-owned EnvironmentFile paths have been
+# migrated from /etc to /srv/projects/fadego/private/systemd-env/.
+# The owner's central project-secrets vault is a protected exception: do not
+# move or duplicate oauth.env out of /root/project-secrets/fadego-gmail/.
 # Root reads these files before dropping privileges to fadego-staging.
 # Do not place secret values or application sessions in GitHub.
 [Unit]
@@ -15,7 +17,7 @@ WorkingDirectory=/srv/projects/fadego/current
 Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1
 EnvironmentFile=/srv/projects/fadego/private/systemd-env/app.env
-EnvironmentFile=-/srv/projects/fadego/private/systemd-env/oauth.env
+EnvironmentFile=-/root/project-secrets/fadego-gmail/oauth.env
 EnvironmentFile=/srv/projects/fadego/private/systemd-env/send-closed.env
 ExecStart=/usr/bin/node /srv/projects/fadego/current/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3100
 Restart=on-failure
